@@ -49,19 +49,60 @@ uv run query.py "Summarize Gaussian Process requirements" >> research_notes.md
 # Simple Filters (AND logic)
 uv run query.py "Algorithm breakdown" --category economics --year 2024
 
-# Advanced Boolean Logic (JSON String)
-uv run query.py "Complex search" --filter-json '{"or": [{"and": [{"key": "category", "value": "economics"}, {"key": "year", "value": 2024}]}, {"key": "category", "value": "statistics"}]}'
+# Advanced Boolean Logic (JSON String or File)
+# You can pass a raw JSON string or a path to a *.json file.
+uv run query.py "Complex search" --filter-json '{
+    "or": [
+        {"and": [{"key": "category", "value": "economics"}, 
+        {"key": "year", "value": 2024}]}, 
+        {"key": "category", "value": "statistics"}
+    ]
+}'
+
+# Using a filter file
+uv run query.py "Research from 2020-2022" --filter-json filters.json
+```
+
+#### JSON Filter Syntax (ExactMatch, Range, InFilter)
+The `--filter-json` option supports standard LlamaIndex operators to implement different filter types.
+
+| Filter Type | Operator | Example | Description |
+| :--- | :--- | :--- | :--- |
+| **ExactMatch** | `==` | `{"key": "year", "value": 2024}` | Matches the value exactly. |
+| **Range** | `>`, `<`, `>=`, `<=` | `{"key": "year", "value": 2020, "operator": ">="}` | Matches values within a numerical range. |
+| **InFilter** | `in` | `{"key": "tags", "value": "GP", "operator": "in"}` | Matches if the value is within a list (e.g., tags). |
+
+**Example `filters.json`:**
+```json
+{
+    "and": [
+        {"key": "year", "value": 2020, "operator": ">="},
+        {"key": "year", "value": 2022, "operator": "<="},
+        {"key": "tags", "value": "economics", "operator": "in"}
+    ]
+}
 ```
 
 #### Python Usage
 ```python
 import nest_asyncio
-from query import get_query_engine
+from query import get_query_engine, parse_complex_filters
 
 # Required for async parsing in notebooks
 nest_asyncio.apply()
 
-engine = get_query_engine()
+# Define filters as a dictionary
+filter_data = {
+    "and": [
+        {"key": "year", "value": 2022, "operator": ">="},
+        {"key": "tags", "value": "statistics", "operator": "in"}
+    ]
+}
+
+# Parse and apply to engine
+filters = parse_complex_filters(filter_data)
+engine = get_query_engine(filters=filters)
+
 response = engine.query("Your technical question here")
 print(response)
 ```
@@ -70,12 +111,12 @@ print(response)
 
 The system automatically maps your YAML header to searchable metadata.
 
-| YAML Key | Filter Type | Example Use Case |
-| :--- | :--- | :--- |
-| `year` | `ExactMatch`, `Range` | Filter by specific year or period. |
-| `category` | `ExactMatch` | Narrow search to a top-level folder. |
-| `tags` | `InFilter` | Filter by methodology or sub-topic. |
-| `authors` | `InFilter` | Find research by a specific scientist. |
+| YAML Key | Filter Type | JSON Operator | Example Use Case |
+| :--- | :--- | :--- | :--- |
+| `year` | `ExactMatch`, `Range` | `==`, `>`, `<`, etc. | Filter by specific year or period. |
+| `category` | `ExactMatch` | `==` | Narrow search to a top-level folder. |
+| `tags` | `InFilter` | `in` | Filter by methodology or sub-topic. |
+| `authors` | `InFilter` | `in` | Find research by a specific scientist. |
 
 ## Scientific Persona & Formatting
 The system uses a **Senior Staff Data Scientist** persona:
