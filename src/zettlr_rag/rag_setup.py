@@ -96,7 +96,7 @@ async def main_async() -> None:
 
     # 5. Final Verification Query
     print("\n📝 Running verification query...")
-    query_engine = index.as_query_engine(similarity_top_k=5)
+    query_engine = index.as_query_engine(similarity_top_k=20)
     response = query_engine.query("Summarize the shrinkage can be used to improve experiment estimates and their precision.")
     print(f"\n# Query Response\n{response}")
 

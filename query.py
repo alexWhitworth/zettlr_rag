@@ -23,7 +23,7 @@ def get_query_engine(filters=None):
     index = VectorStoreIndex.from_vector_store(vector_store)
     
     return index.as_query_engine(
-        similarity_top_k=5,
+        similarity_top_k=20,
         filters=filters,
         system_prompt=Settings.system_prompt
     )
