@@ -1,0 +1,107 @@
+import os
+import asyncio
+import chromadb
+import nest_asyncio
+from dotenv import load_dotenv
+from llama_index.core import (
+    VectorStoreIndex, 
+    StorageContext, 
+    SimpleDirectoryReader, 
+    Settings,
+    load_index_from_storage
+)
+from llama_index.core.node_parser import MarkdownNodeParser
+from llama_index.llms.google_genai import GoogleGenAI
+from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
+from llama_index.vector_stores.chroma import ChromaVectorStore
+
+def setup_settings() -> None:
+    """Initialize global LlamaIndex settings."""
+    nest_asyncio.apply()
+    load_dotenv()
+    if not os.getenv("GEMINI_API_KEY"):
+        raise ValueError("API Key not found. Check your .env file.")
+    
+    Settings.llm = GoogleGenAI(
+        model="models/gemini-3-flash-preview", 
+        api_key=os.getenv("GEMINI_API_KEY")
+    )
+    
+    Settings.embed_model = GoogleGenAIEmbedding(
+        model_name="models/gemini-embedding-2-preview", 
+        api_key=os.getenv("GEMINI_API_KEY"),
+        embed_batch_size=1,
+        retry_min_seconds=5,
+        retries=10
+    )
+    
+    Settings.system_prompt = (
+        "I am a Senior Staff Data Scientist, Algorithms. When I ask technical or research questions, "
+        "provide high-level scientific detail and include paper citations (bibtex format). "
+        "Use clean Markdown formatting with clear headers, bold text for key terms, and LaTeX for math. "
+        "Prefer Python for all code examples. Assume a high level of statistical and algorithmic understanding. "
+        "Provide sufficient detail to produce complete answers, but prefer brevity to unnecessarily verbose responses. "
+        "Do not include conversational filler—start directly with the content."
+    )
+    
+    Settings.node_parser = MarkdownNodeParser()
+
+def load_academic_markdown(directory: str) -> list:
+    """Load MD Files while preserving YAML Metadata."""
+    if not os.path.exists(directory):
+        raise FileNotFoundError(f"Directory not found: {directory}")
+    reader = SimpleDirectoryReader(input_dir=directory, recursive=True)
+    documents = reader.load_data()
+    return documents
+
+async def main_async() -> None:
+    setup_settings()
+    base_path = "/Users/awhitworth/Library/CloudStorage/ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers"
+    metadata_path = "./.index_metadata"
+    
+    print(f"📂 Scanning library: {base_path}")
+    documents = load_academic_markdown(base_path)
+
+    # 1. Initialize Vector Store (Chroma)
+    db = chromadb.PersistentClient(path="./chroma_db_academic")
+    chroma_collection = db.get_or_create_collection("research_papers")
+    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+
+    # 2. Load or Initialize Storage Context (with DocStore for Hash tracking)
+    if os.path.exists(metadata_path) and os.listdir(metadata_path):
+        print("Loading existing index metadata...")
+        storage_context = StorageContext.from_defaults(
+            vector_store=vector_store, 
+            persist_dir=metadata_path
+        )
+        index = load_index_from_storage(storage_context)
+    else:
+        print("Initializing new index metadata...")
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
+        index = VectorStoreIndex([], storage_context=storage_context)
+
+    # 3. Smart Sync: Refresh Index
+    # This checks hashes and only processes New or Changed files.
+    # It also handles deletions from the vector store.
+    print("🔄 Smart Sync: Detecting changes (additions, edits, deletions)...")
+    refreshed_docs = index.refresh_ref_docs(documents, show_progress=True)
+    
+    # Log results of the sync
+    new_count = sum(refreshed_docs)
+    print(f"✅ Sync complete. Updated/Added {new_count} documents.")
+
+    # 4. Persist Metadata (crucial for detecting changes next time)
+    index.storage_context.persist(persist_dir=metadata_path)
+    print(f"💾 Metadata persisted to {metadata_path}")
+
+    # 5. Final Verification Query
+    print("\n📝 Running verification query...")
+    query_engine = index.as_query_engine(similarity_top_k=5)
+    response = query_engine.query("Summarize the shrinkage can be used to improve experiment estimates and their precision.")
+    print(f"\n# Query Response\n{response}")
+
+def main() -> None:
+    asyncio.run(main_async())
+
+if __name__ == "__main__":
+    main()

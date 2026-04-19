@@ -1,0 +1,130 @@
+Metadata-Version: 2.4
+Name: zettlr-rag
+Version: 0.1.0
+Summary: RAG for my academic papers library
+License: MIT
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: llama-index-llms-google-genai
+Requires-Dist: llama-index-embeddings-google-genai
+Requires-Dist: llama-index-vector-stores-chroma
+Requires-Dist: chromadb
+Requires-Dist: python-frontmatter
+Requires-Dist: watchdog
+Requires-Dist: python-dotenv
+Requires-Dist: pandas
+Requires-Dist: nest-asyncio
+
+# Zettlr RAG (MD-RAG)
+
+A specialized Retrieval-Augmented Generation (RAG) system for academic paper libraries. This system implements **MD-RAG** (Metadata RAG), preserving and utilizing YAML frontmatter from Zettlr markdown files for high-precision scientific retrieval.
+
+## Tech Stack
+- **LLM**: Gemini 3 Flash Preview (`gemini-3-flash-preview`)
+- **Embeddings**: Gemini Embedding 2 Preview (`gemini-embedding-2-preview`)
+- **Vector Store**: ChromaDB (Persistent)
+- **Persona**: Senior Staff Data Scientist, Algorithms
+
+## Installation
+
+```bash
+uv pip install -e .
+```
+
+## Usage
+
+### 1. Initial Setup
+Processes your library, parses markdown elements (tables, headers), and creates the persistent ChromaDB index.
+```bash
+zettlr-rag-setup
+```
+
+### 2. Live Monitoring
+Monitors your Zettlr paper directory for new `.md` files. When you save a new file, it is automatically parsed, indexed, and added to the database.
+```bash
+zettlr-rag-watch
+```
+
+### 3. Querying
+
+#### CLI Usage
+The `query.py` script is the primary entry point for terminal-based research.
+
+```bash
+# Standard Query
+uv run query.py "What are the core components of GP models?"
+
+# Chaining to Markdown (Redirect stdout to file)
+# Note: Source metadata prints to stderr and won't pollute the file.
+uv run query.py "Summarize Gaussian Process requirements" >> research_notes.md
+
+# Simple Filters (AND logic)
+uv run query.py "Algorithm breakdown" --category economics --year 2024
+
+# Advanced Boolean Logic (JSON String)
+uv run query.py "Complex search" --filter-json '{"or": [{"and": [{"key": "category", "value": "economics"}, {"key": "year", "value": 2024}]}, {"key": "category", "value": "statistics"}]}'
+
+# Advanced Boolean Logic (JSON File)
+uv run query.py "Complex search" --filter-json path/to/filters.json
+```
+
+#### Python Usage
+You can use the library interactively in Python or Jupyter notebooks.
+
+```python
+import nest_asyncio
+from query import get_query_engine
+from llama_index.core.vector_stores import MetadataFilters, MetadataFilter, FilterCondition
+
+# Required for async parsing in notebooks/scripts
+nest_asyncio.apply()
+
+# 1. Simple Engine
+engine = get_query_engine()
+
+# 2. Complex Filtered Engine
+# logic: (economics AND 2024) OR (statistics)
+filters = MetadataFilters(
+    condition=FilterCondition.OR,
+    filters=[
+        MetadataFilters(
+            condition=FilterCondition.AND,
+            filters=[
+                MetadataFilter(key="category", value="economics"),
+                MetadataFilter(key="year", value=2024)
+            ]
+        ),
+        MetadataFilter(key="category", value="statistics")
+    ]
+)
+engine = get_query_engine(filters=filters)
+
+# Execute Query
+response = engine.query("Your technical question here")
+print(response)
+```
+
+## Advanced Querying (MD-RAG Filters)
+
+The system automatically maps your YAML header to searchable metadata.
+
+| YAML Key | Filter Type | Example Use Case |
+| :--- | :--- | :--- |
+| `year` | `ExactMatch`, `Range` | Filter by specific year or period. |
+| `category` | `ExactMatch` | Narrow search to a top-level folder. |
+| `tags` | `InFilter` | Filter by methodology or sub-topic. |
+| `authors` | `InFilter` | Find research by a specific scientist. |
+
+## Scientific Persona & Formatting
+The system uses a **Senior Staff Data Scientist** persona:
+- **BibTeX citations** included for all referenced papers.
+- **LaTeX** for all mathematical expressions.
+- **Python** preferred for code examples.
+- **Pure Markdown** output for direct file redirection/chaining.
+
+## Implementation Details
+- **Structural Parsing**: Uses `MarkdownElementNodeParser` to preserve headers and tables.
+- **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
+- **Persistent Storage**: Database stored in `./chroma_db_academic`.

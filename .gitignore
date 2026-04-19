@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.python-version
+uv.lock
+
+# Local Database (ChromaDB)
+# Do not commit binary stores or metadata
+chroma_db_academic/
+.index_metadata/
+
+# Generic data/output folders
+data/
+outputs/
+*.pdf
+*.md
+!README.md
+!REFACTOR_NOTES.md
+
+# Environment / Secrets
+.env
+
+# Logs and temporary files
+*.log
+list_models.py
+
+# Research Notes 
+# (Ignore if you want your research log to stay local)
+# research_notes.md

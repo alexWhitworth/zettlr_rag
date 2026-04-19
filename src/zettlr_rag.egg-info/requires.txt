@@ -1,0 +1,9 @@
+llama-index-llms-google-genai
+llama-index-embeddings-google-genai
+llama-index-vector-stores-chroma
+chromadb
+python-frontmatter
+watchdog
+python-dotenv
+pandas
+nest-asyncio
