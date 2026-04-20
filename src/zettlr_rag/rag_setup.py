@@ -1,19 +1,39 @@
-import os
 import asyncio
+import os
+import time
+from typing import List
+
 import chromadb
 import nest_asyncio
 from dotenv import load_dotenv
 from llama_index.core import (
-    VectorStoreIndex, 
-    StorageContext, 
-    SimpleDirectoryReader, 
     Settings,
-    load_index_from_storage
+    SimpleDirectoryReader,
+    StorageContext,
+    VectorStoreIndex,
+    load_index_from_storage,
 )
 from llama_index.core.node_parser import MarkdownNodeParser
-from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
+from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
+
+
+class RateLimitedEmbedding(GoogleGenAIEmbedding):
+    sleep_seconds: float = 1.0  # must declare as class field for pydantic
+
+    def __init__(self, sleep_seconds: float = 1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.sleep_seconds = sleep_seconds
+
+    def _get_text_embedding(self, text: str) -> List[float]:
+        time.sleep(self.sleep_seconds)
+        return super()._get_text_embedding(text)
+
+    def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
+        time.sleep(self.sleep_seconds)
+        return super()._get_text_embeddings(texts)
+
 
 def setup_settings() -> None:
     """Initialize global LlamaIndex settings."""
@@ -21,20 +41,20 @@ def setup_settings() -> None:
     load_dotenv()
     if not os.getenv("GEMINI_API_KEY"):
         raise ValueError("API Key not found. Check your .env file.")
-    
+
     Settings.llm = GoogleGenAI(
-        model="models/gemini-3-flash-preview", 
-        api_key=os.getenv("GEMINI_API_KEY")
+        model="models/gemini-3-flash-preview", api_key=os.getenv("GEMINI_API_KEY")
     )
-    
-    Settings.embed_model = GoogleGenAIEmbedding(
-        model_name="models/gemini-embedding-2-preview", 
+
+    Settings.embed_model = RateLimitedEmbedding(
+        model_name="models/gemini-embedding-2-preview",
         api_key=os.getenv("GEMINI_API_KEY"),
-        embed_batch_size=5,
-        retry_min_seconds=5,
-        retries=10
+        embed_batch_size=10,
+        retry_min_seconds=10,
+        retries=10,
+        sleep_seconds=1.0,  # Add a delay between embedding calls to respect rate limits
     )
-    
+
     Settings.system_prompt = (
         "I am a Senior Staff Data Scientist, Algorithms. When I ask technical or research questions, "
         "provide high-level scientific detail and include paper citations (bibtex format). "
@@ -43,8 +63,9 @@ def setup_settings() -> None:
         "Provide sufficient detail to produce complete answers, but prefer brevity to unnecessarily verbose responses. "
         "Do not include conversational filler—start directly with the content."
     )
-    
+
     Settings.node_parser = MarkdownNodeParser()
+
 
 def load_academic_markdown(directory: str) -> list:
     """Load MD Files while preserving YAML Metadata."""
@@ -54,11 +75,12 @@ def load_academic_markdown(directory: str) -> list:
     documents = reader.load_data()
     return documents
 
+
 async def main_async() -> None:
     setup_settings()
     base_path = "/Users/awhitworth/Library/CloudStorage/ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers"
     metadata_path = "./.index_metadata"
-    
+
     print(f"📂 Scanning library: {base_path}")
     documents = load_academic_markdown(base_path)
 
@@ -71,8 +93,7 @@ async def main_async() -> None:
     if os.path.exists(metadata_path) and os.listdir(metadata_path):
         print("Loading existing index metadata...")
         storage_context = StorageContext.from_defaults(
-            vector_store=vector_store, 
-            persist_dir=metadata_path
+            vector_store=vector_store, persist_dir=metadata_path
         )
         index = load_index_from_storage(storage_context)
     else:
@@ -85,7 +106,7 @@ async def main_async() -> None:
     # It also handles deletions from the vector store.
     print("🔄 Smart Sync: Detecting changes (additions, edits, deletions)...")
     refreshed_docs = index.refresh_ref_docs(documents, show_progress=True)
-    
+
     # Log results of the sync
     new_count = sum(refreshed_docs)
     print(f"✅ Sync complete. Updated/Added {new_count} documents.")
@@ -97,11 +118,15 @@ async def main_async() -> None:
     # 5. Final Verification Query
     print("\n📝 Running verification query...")
     query_engine = index.as_query_engine(similarity_top_k=20)
-    response = query_engine.query("Summarize the shrinkage can be used to improve experiment estimates and their precision.")
+    response = query_engine.query(
+        "Summarize the shrinkage can be used to improve experiment estimates and their precision."
+    )
     print(f"\n# Query Response\n{response}")
+
 
 def main() -> None:
     asyncio.run(main_async())
+
 
 if __name__ == "__main__":
     main()
