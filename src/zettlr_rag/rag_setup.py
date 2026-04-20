@@ -30,7 +30,7 @@ def setup_settings() -> None:
     Settings.embed_model = GoogleGenAIEmbedding(
         model_name="models/gemini-embedding-2-preview", 
         api_key=os.getenv("GEMINI_API_KEY"),
-        embed_batch_size=1,
+        embed_batch_size=5,
         retry_min_seconds=5,
         retries=10
     )
