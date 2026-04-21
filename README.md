@@ -107,22 +107,6 @@ response = engine.query("Your technical question here")
 print(response)
 ```
 
-## Testing
-
-The project uses `pytest` for testing. The tests are designed to be isolated and use temporary directories for ChromaDB and metadata to avoid impacting your production data.
-
-### Running Tests
-To run all tests:
-```bash
-uv run pytest
-```
-
-### Test Coverage
-The tests cover:
-- **RAG Setup**: Initializing settings, loading documents, and the full indexing pipeline (using mocks to avoid API calls).
-- **File Watcher**: Processing and indexing new files.
-- **Isolated Environments**: Verification that tests do not modify `chroma_db_academic` or `.index_metadata`.
-
 ## Advanced Querying (MD-RAG Filters)
 
 The system automatically maps your YAML header to searchable metadata.
@@ -140,6 +124,22 @@ The system uses a **Senior Staff Data Scientist** persona:
 - **LaTeX** for all mathematical expressions.
 - **Python** preferred for code examples.
 - **Pure Markdown** output for direct file redirection/chaining.
+
+## Testing
+
+The project uses `pytest` for testing. The tests are designed to be isolated and use temporary directories for ChromaDB and metadata to avoid impacting your production data.
+
+### Running Tests
+To run all tests:
+```bash
+uv run pytest
+```
+
+### Test Coverage
+The tests cover:
+- **RAG Setup**: Initializing settings, loading documents, and the full indexing pipeline (using mocks to avoid API calls).
+- **File Watcher**: Processing and indexing new files.
+- **Isolated Environments**: Verification that tests do not modify `chroma_db_academic` or `.index_metadata`.
 
 ## Implementation Details
 - **Structural Parsing**: Uses `MarkdownNodeParser` to preserve headers and logical sections.
