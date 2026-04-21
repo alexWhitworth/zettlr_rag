@@ -16,10 +16,8 @@ def test_process_new_file():
     mock_node_parser = MagicMock()
     mock_node_parser.get_nodes_from_documents.return_value = [MagicMock()]
     
-    handler = NewPaperHandler(index=mock_index, node_parser=mock_node_parser)
-    handler.process_new_file(test_file)
+    handler = NewPaperHandler(index=mock_index, metadata_path="./.index_metadata", node_parser=mock_node_parser)
+    handler.process_file(test_file)
     
-    # Verify node parser was called
-    assert mock_node_parser.get_nodes_from_documents.called
-    # Verify index.insert_nodes was called
-    assert mock_index.insert_nodes.called
+    # Verify index.refresh_ref_docs was called
+    assert mock_index.refresh_ref_docs.called

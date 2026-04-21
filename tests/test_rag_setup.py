@@ -8,8 +8,9 @@ async def test_load_academic_markdown():
     path = "/Users/awhitworth/Library/CloudStorage/ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers/data_methods/surveys"
     documents = load_academic_markdown(path)
     assert len(documents) > 0
-    # Check if we got markdown files
-    assert all(doc.doc_id for doc in documents)
+    # Check if we got markdown files and doc_id matches file_path
+    for doc in documents:
+        assert doc.doc_id == doc.metadata["file_path"]
 
 from llama_index.core.llms.mock import MockLLM
 from llama_index.core.embeddings.mock_embed_model import MockEmbedding

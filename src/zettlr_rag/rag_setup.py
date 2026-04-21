@@ -99,6 +99,11 @@ def load_academic_markdown(directory: str) -> list:
         raise FileNotFoundError(f"Directory not found: {directory}")
     reader = SimpleDirectoryReader(input_dir=directory, recursive=True)
     documents = reader.load_data()
+
+    # Stable doc IDs based on file path
+    for doc in documents:
+        doc.doc_id = doc.metadata["file_path"]
+
     return documents
 
 
