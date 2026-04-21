@@ -146,3 +146,21 @@ The tests cover:
 - **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing double-indexing.
 - **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
 - **Persistent Storage**: Database stored in `./chroma_db_academic`.
+
+### Appendix: checking the chroma_db size:
+
+```bash:
+du -sh ./chroma_db_academic # file size
+
+# number of chunks and docs
+uv run python -c 'import chromadb
+client = chromadb.PersistentClient(path="./chroma_db_academic")
+col = client.get_collection("research_papers")
+
+# Check how many unique source docs are indexed
+results = col.get(include=["metadatas"])
+sources = set(m.get("file_name") or m.get("file_path") for m in results["metadatas"])
+print(f"Number of chunks: {col.count()}") 
+print(f"Unique source docs: {len(sources)}")
+'
+```
