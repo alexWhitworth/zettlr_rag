@@ -1,10 +1,10 @@
 import asyncio
 import os
 import time
+import logging
 from typing import List
 
 import chromadb
-import nest_asyncio
 from dotenv import load_dotenv
 from llama_index.core import (
     Settings,
@@ -18,6 +18,9 @@ from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class RateLimitedEmbedding(GoogleGenAIEmbedding):
     sleep_seconds: float = 1.0  # must declare as class field for pydantic
@@ -31,16 +34,39 @@ class RateLimitedEmbedding(GoogleGenAIEmbedding):
         return super()._get_text_embedding(text)
 
     def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
-        time.sleep(self.sleep_seconds)
-        return super()._get_text_embeddings(texts)
+        if not texts:
+            return []
+        logger.info(f"Embedding {len(texts)} texts (sync) via manual loop")
+        embeddings = []
+        for text in texts:
+            embeddings.append(self._get_text_embedding(text))
+        return embeddings
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        await asyncio.sleep(self.sleep_seconds)
+        return await super()._aget_text_embedding(text)
+
+    async def _aget_text_embeddings(self, texts: List[str]) -> List[List[float]]:
+        if not texts:
+            return []
+        logger.info(f"Embedding {len(texts)} texts (async) via gather")
+        # To strictly respect sleep_seconds per request, we should probably do them sequentially
+        # or stagger them. For simplicity and correctness, let's do sequential first.
+        embeddings = []
+        for text in texts:
+            embeddings.append(await self._aget_text_embedding(text))
+        return embeddings
 
 
 def setup_settings() -> None:
     """Initialize global LlamaIndex settings."""
-    nest_asyncio.apply()
     load_dotenv()
     if not os.getenv("GEMINI_API_KEY"):
         raise ValueError("API Key not found. Check your .env file.")
+    
+    # Ensure GOOGLE_API_KEY is also set as some underlying SDKs expect it
+    if not os.getenv("GOOGLE_API_KEY"):
+        os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
 
     Settings.llm = GoogleGenAI(
         model="models/gemini-3-flash-preview", api_key=os.getenv("GEMINI_API_KEY")
@@ -76,16 +102,19 @@ def load_academic_markdown(directory: str) -> list:
     return documents
 
 
-async def main_async() -> None:
+async def main_async(
+    base_path: str = "/Users/awhitworth/Library/CloudStorage/ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers",
+    chroma_path: str = "./chroma_db_academic",
+    metadata_path: str = "./.index_metadata",
+    run_verification: bool = True
+) -> None:
     setup_settings()
-    base_path = "/Users/awhitworth/Library/CloudStorage/ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers"
-    metadata_path = "./.index_metadata"
 
     print(f"📂 Scanning library: {base_path}")
     documents = load_academic_markdown(base_path)
 
     # 1. Initialize Vector Store (Chroma)
-    db = chromadb.PersistentClient(path="./chroma_db_academic")
+    db = chromadb.PersistentClient(path=chroma_path)
     chroma_collection = db.get_or_create_collection("research_papers")
     vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
@@ -102,8 +131,6 @@ async def main_async() -> None:
         index = VectorStoreIndex([], storage_context=storage_context)
 
     # 3. Smart Sync: Refresh Index
-    # This checks hashes and only processes New or Changed files.
-    # It also handles deletions from the vector store.
     print("🔄 Smart Sync: Detecting changes (additions, edits, deletions)...")
     refreshed_docs = index.refresh_ref_docs(documents, show_progress=True)
 
@@ -116,12 +143,13 @@ async def main_async() -> None:
     print(f"💾 Metadata persisted to {metadata_path}")
 
     # 5. Final Verification Query
-    print("\n📝 Running verification query...")
-    query_engine = index.as_query_engine(similarity_top_k=20)
-    response = query_engine.query(
-        "Summarize the shrinkage can be used to improve experiment estimates and their precision."
-    )
-    print(f"\n# Query Response\n{response}")
+    if run_verification:
+        print("\n📝 Running verification query...")
+        query_engine = index.as_query_engine(similarity_top_k=20)
+        response = query_engine.query(
+            "Summarize the shrinkage can be used to improve experiment estimates and their precision."
+        )
+        print(f"\n# Query Response\n{response}")
 
 
 def main() -> None:

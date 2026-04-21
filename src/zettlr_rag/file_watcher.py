@@ -8,11 +8,13 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from zettlr_rag.rag_setup import setup_settings
+from llama_index.vector_stores.chroma import ChromaVectorStore
 
 
 class NewPaperHandler(FileSystemEventHandler):
-    def __init__(self, index):
+    def __init__(self, index, node_parser=None):
         self.index = index
+        self.node_parser = node_parser or Settings.node_parser
 
     def on_created(self, event):
         if not event.is_directory and event.src_path.endswith(".md"):
@@ -23,21 +25,23 @@ class NewPaperHandler(FileSystemEventHandler):
         # 1. Load the specific new file
         documents = SimpleDirectoryReader(input_files=[file_path]).load_data()
 
-        # 2. Parse using MarkdownElementNodeParser from Settings
-        nodes = Settings.node_parser.get_nodes_from_documents(documents)
-        base_nodes, objects = Settings.node_parser.get_nodes_and_objects(nodes)
-
+        # 2. Parse using node_parser
+        nodes = self.node_parser.get_nodes_from_documents(documents)
+        # MarkdownNodeParser.get_nodes_and_objects is specific to MarkdownElementNodeParser
+        # Our MarkdownNodeParser in setup_settings is the standard one.
+        # Let's adjust to be generic.
+        
         # 3. Insert into the existing persistent index
-        self.index.insert_nodes(base_nodes + objects)
+        self.index.insert_nodes(nodes)
         print(f"✅ Successfully indexed {os.path.basename(file_path)}")
 
 
-def start_monitor(path_to_watch: str) -> None:
+def start_monitor(path_to_watch: str, chroma_path: str = "./chroma_db_academic") -> None:
     # This will now initialize GoogleGenAI with gemini-3-flash-preview
     setup_settings()
 
     # Initialize persistent storage
-    db = chromadb.PersistentClient(path="./chroma_db_academic")
+    db = chromadb.PersistentClient(path=chroma_path)
     chroma_collection = db.get_or_create_collection("research_papers")
     vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 

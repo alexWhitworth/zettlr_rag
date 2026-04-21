@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: zettlr-rag
-Version: 0.1.0
+Version: 0.2.0
 Summary: RAG for my academic papers library
 License: MIT
 Classifier: License :: OSI Approved :: MIT License
@@ -35,14 +35,20 @@ uv pip install -e .
 
 ## Usage
 
-### 1. Initial Setup
-Processes your library, parses markdown elements (tables, headers), and creates the persistent ChromaDB index.
+### 1. Smart Sync (Setup & Maintenance)
+The `zettlr-rag-setup` command uses **Smart Sync** logic. It tracks file hashes in `./.index_metadata` to perform incremental updates.
+
+- **Initial Run**: Processes your entire library.
+- **Subsequent Runs**: Detects and indexes **only** new or modified files.
+- **Deletions**: Automatically removes vectors for files you've deleted from your library.
+
 ```bash
 zettlr-rag-setup
 ```
 
-### 2. Live Monitoring
-Monitors your Zettlr paper directory for new `.md` files. When you save a new file, it is automatically parsed, indexed, and added to the database.
+### 2. Live Monitoring (Optional)
+If you prefer real-time updates while you write, run the watcher. It will automatically trigger indexing for any file you save.
+
 ```bash
 zettlr-rag-watch
 ```
@@ -57,51 +63,65 @@ The `query.py` script is the primary entry point for terminal-based research.
 uv run query.py "What are the core components of GP models?"
 
 # Chaining to Markdown (Redirect stdout to file)
-# Note: Source metadata prints to stderr and won't pollute the file.
 uv run query.py "Summarize Gaussian Process requirements" >> research_notes.md
 
 # Simple Filters (AND logic)
 uv run query.py "Algorithm breakdown" --category economics --year 2024
 
-# Advanced Boolean Logic (JSON String)
-uv run query.py "Complex search" --filter-json '{"or": [{"and": [{"key": "category", "value": "economics"}, {"key": "year", "value": 2024}]}, {"key": "category", "value": "statistics"}]}'
+# Advanced Boolean Logic (JSON String or File)
+# You can pass a raw JSON string or a path to a *.json file.
+uv run query.py "Complex search" --filter-json '{
+    "or": [
+        {"and": [{"key": "category", "value": "economics"}, 
+        {"key": "year", "value": 2024}]}, 
+        {"key": "category", "value": "statistics"}
+    ]
+}'
 
-# Advanced Boolean Logic (JSON File)
-uv run query.py "Complex search" --filter-json path/to/filters.json
+# Using a filter file
+uv run query.py "Research from 2020-2022" --filter-json filters.json
+```
+
+#### JSON Filter Syntax (ExactMatch, Range, InFilter)
+The `--filter-json` option supports standard LlamaIndex operators to implement different filter types.
+
+| Filter Type | Operator | Example | Description |
+| :--- | :--- | :--- | :--- |
+| **ExactMatch** | `==` | `{"key": "year", "value": 2024}` | Matches the value exactly. |
+| **Range** | `>`, `<`, `>=`, `<=` | `{"key": "year", "value": 2020, "operator": ">="}` | Matches values within a numerical range. |
+| **InFilter** | `in` | `{"key": "tags", "value": "GP", "operator": "in"}` | Matches if the value is within a list (e.g., tags). |
+
+**Example `filters.json`:**
+```json
+{
+    "and": [
+        {"key": "year", "value": 2020, "operator": ">="},
+        {"key": "year", "value": 2022, "operator": "<="},
+        {"key": "tags", "value": "economics", "operator": "in"}
+    ]
+}
 ```
 
 #### Python Usage
-You can use the library interactively in Python or Jupyter notebooks.
-
 ```python
 import nest_asyncio
-from query import get_query_engine
-from llama_index.core.vector_stores import MetadataFilters, MetadataFilter, FilterCondition
+from query import get_query_engine, parse_complex_filters
 
-# Required for async parsing in notebooks/scripts
+# Required for async parsing in notebooks
 nest_asyncio.apply()
 
-# 1. Simple Engine
-engine = get_query_engine()
-
-# 2. Complex Filtered Engine
-# logic: (economics AND 2024) OR (statistics)
-filters = MetadataFilters(
-    condition=FilterCondition.OR,
-    filters=[
-        MetadataFilters(
-            condition=FilterCondition.AND,
-            filters=[
-                MetadataFilter(key="category", value="economics"),
-                MetadataFilter(key="year", value=2024)
-            ]
-        ),
-        MetadataFilter(key="category", value="statistics")
+# Define filters as a dictionary
+filter_data = {
+    "and": [
+        {"key": "year", "value": 2022, "operator": ">="},
+        {"key": "tags", "value": "statistics", "operator": "in"}
     ]
-)
+}
+
+# Parse and apply to engine
+filters = parse_complex_filters(filter_data)
 engine = get_query_engine(filters=filters)
 
-# Execute Query
 response = engine.query("Your technical question here")
 print(response)
 ```
@@ -110,12 +130,12 @@ print(response)
 
 The system automatically maps your YAML header to searchable metadata.
 
-| YAML Key | Filter Type | Example Use Case |
-| :--- | :--- | :--- |
-| `year` | `ExactMatch`, `Range` | Filter by specific year or period. |
-| `category` | `ExactMatch` | Narrow search to a top-level folder. |
-| `tags` | `InFilter` | Filter by methodology or sub-topic. |
-| `authors` | `InFilter` | Find research by a specific scientist. |
+| YAML Key | Filter Type | JSON Operator | Example Use Case |
+| :--- | :--- | :--- | :--- |
+| `year` | `ExactMatch`, `Range` | `==`, `>`, `<`, etc. | Filter by specific year or period. |
+| `category` | `ExactMatch` | `==` | Narrow search to a top-level folder. |
+| `tags` | `InFilter` | `in` | Filter by methodology or sub-topic. |
+| `authors` | `InFilter` | `in` | Find research by a specific scientist. |
 
 ## Scientific Persona & Formatting
 The system uses a **Senior Staff Data Scientist** persona:
@@ -125,6 +145,7 @@ The system uses a **Senior Staff Data Scientist** persona:
 - **Pure Markdown** output for direct file redirection/chaining.
 
 ## Implementation Details
-- **Structural Parsing**: Uses `MarkdownElementNodeParser` to preserve headers and tables.
+- **Structural Parsing**: Uses `MarkdownNodeParser` to preserve headers and logical sections.
+- **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing double-indexing.
 - **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
 - **Persistent Storage**: Database stored in `./chroma_db_academic`.

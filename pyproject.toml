@@ -1,6 +1,6 @@
 [project]
 name = "zettlr-rag"
-version = "0.2.0"
+version = "0.3.0"
 description = "RAG for my academic papers library"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -25,6 +25,7 @@ classifiers = [
 dev = [
     "pytest",
     "pytest-cov",
+    "pytest-asyncio",
     "ruff",
     "mypy",
     "black",
