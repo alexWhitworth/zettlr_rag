@@ -23,6 +23,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RateLimitedEmbedding(GoogleGenAIEmbedding):
+    """
+    Wraps GoogleGenAIEmbedding with a sleep between batch requests to stay
+    under Gemini API rate limits. Uses the parent's native batch endpoint
+    (batchEmbedContents) so a batch of N texts = 1 API request.
+    """
     sleep_seconds: float = 1.0  # must declare as class field for pydantic
 
     def __init__(self, sleep_seconds: float = 1.0, **kwargs):
@@ -36,11 +41,9 @@ class RateLimitedEmbedding(GoogleGenAIEmbedding):
     def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []
-        logger.info(f"Embedding {len(texts)} texts (sync) via manual loop")
-        embeddings = []
-        for text in texts:
-            embeddings.append(self._get_text_embedding(text))
-        return embeddings
+        logger.info(f"Embedding {len(texts)} texts (sync) via native batch")
+        time.sleep(self.sleep_seconds)
+        return super()._get_text_embeddings(texts)
 
     async def _aget_text_embedding(self, text: str) -> List[float]:
         await asyncio.sleep(self.sleep_seconds)
@@ -49,13 +52,9 @@ class RateLimitedEmbedding(GoogleGenAIEmbedding):
     async def _aget_text_embeddings(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []
-        logger.info(f"Embedding {len(texts)} texts (async) via gather")
-        # To strictly respect sleep_seconds per request, we should probably do them sequentially
-        # or stagger them. For simplicity and correctness, let's do sequential first.
-        embeddings = []
-        for text in texts:
-            embeddings.append(await self._aget_text_embedding(text))
-        return embeddings
+        logger.info(f"Embedding {len(texts)} texts (async) via native batch")
+        await asyncio.sleep(self.sleep_seconds)
+        return await super()._aget_text_embeddings(texts)
 
 
 def setup_settings() -> None:
@@ -97,7 +96,12 @@ def load_academic_markdown(directory: str) -> list:
     """Load MD Files while preserving YAML Metadata."""
     if not os.path.exists(directory):
         raise FileNotFoundError(f"Directory not found: {directory}")
-    reader = SimpleDirectoryReader(input_dir=directory, recursive=True)
+    reader = SimpleDirectoryReader(
+        input_dir=directory,
+        recursive=True,
+        required_exts=[".md"],
+        exclude_hidden=True,
+    )
     documents = reader.load_data()
 
     # Stable doc IDs based on file path
@@ -111,12 +115,14 @@ async def main_async(
     base_path: str = "/Users/awhitworth/Library/CloudStorage/ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers",
     chroma_path: str = "./chroma_db_academic",
     metadata_path: str = "./.index_metadata",
-    run_verification: bool = True
+    checkpoint_batch_size: int = 50,
+    run_verification: bool = True,
 ) -> None:
     setup_settings()
 
     print(f"📂 Scanning library: {base_path}")
     documents = load_academic_markdown(base_path)
+    print(f"Found {len(documents)} documents.")
 
     # 1. Initialize Vector Store (Chroma)
     db = chromadb.PersistentClient(path=chroma_path)
@@ -135,19 +141,49 @@ async def main_async(
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
         index = VectorStoreIndex([], storage_context=storage_context)
 
-    # 3. Smart Sync: Refresh Index
-    print("🔄 Smart Sync: Detecting changes (additions, edits, deletions)...")
-    refreshed_docs = index.refresh_ref_docs(documents, show_progress=True)
+    # 3. Smart Sync: Refresh Index in batches with checkpointing
+    print(
+        f"🔄 Smart Sync: Processing {len(documents)} docs in batches of "
+        f"{checkpoint_batch_size}..."
+    )
+    total_updated = 0
+    total_batches = (len(documents) + checkpoint_batch_size - 1) // checkpoint_batch_size
 
-    # Log results of the sync
-    new_count = sum(refreshed_docs)
-    print(f"✅ Sync complete. Updated/Added {new_count} documents.")
+    try:
+        for i in range(0, len(documents), checkpoint_batch_size):
+            batch = documents[i : i + checkpoint_batch_size]
+            batch_num = i // checkpoint_batch_size + 1
+            print(
+                f"\n📦 Batch {batch_num}/{total_batches} "
+                f"({len(batch)} docs, {i + len(batch)}/{len(documents)} total)..."
+            )
 
-    # 4. Persist Metadata (crucial for detecting changes next time)
-    index.storage_context.persist(persist_dir=metadata_path)
-    print(f"💾 Metadata persisted to {metadata_path}")
+            refreshed = index.refresh_ref_docs(batch, show_progress=True)
+            batch_updated = sum(refreshed)
+            total_updated += batch_updated
 
-    # 5. Final Verification Query
+            # Checkpoint: persist after every batch
+            index.storage_context.persist(persist_dir=metadata_path)
+            print(
+                f"💾 Checkpoint saved. Batch updated: {batch_updated}, "
+                f"total updated: {total_updated}"
+            )
+    except KeyboardInterrupt:
+        print("\n⚠️  Interrupted — persisting final state before exit...")
+        index.storage_context.persist(persist_dir=metadata_path)
+        print(f"💾 State saved. Updated {total_updated} docs before interrupt.")
+        raise
+    except Exception as e:
+        print(f"\n❌ Error during sync: {e}")
+        print("Attempting to persist state before exit...")
+        index.storage_context.persist(persist_dir=metadata_path)
+        print(f"💾 State saved. Updated {total_updated} docs before error.")
+        raise
+
+    print(f"\n✅ Sync complete. Updated/Added {total_updated} documents total.")
+    print(f"💾 Final metadata persisted to {metadata_path}")
+
+    # 4. Final Verification Query
     if run_verification:
         print("\n📝 Running verification query...")
         query_engine = index.as_query_engine(similarity_top_k=20)
