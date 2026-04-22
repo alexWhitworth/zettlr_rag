@@ -1,27 +1,42 @@
 import os
 import pytest
+from unittest.mock import patch
 from llama_index.core import Settings
-from zettlr_rag.rag_setup import setup_settings
+from llama_index.core.llms.mock import MockLLM
+from llama_index.core.embeddings.mock_embed_model import MockEmbedding
+from llama_index.core.node_parser import MarkdownNodeParser
+
 
 @pytest.fixture(scope="session", autouse=True)
 def mock_settings():
-    """Ensure settings are initialized for tests."""
-    # We might want to mock the API call or use a dummy key if needed,
-    # but for now we'll just run the setup.
-    # If GEMINI_API_KEY is not set, we might need to mock GoogleGenAI.
-    try:
-        setup_settings()
-    except ValueError:
-        # Fallback for environments without API keys during pure logic tests
-        os.environ["GEMINI_API_KEY"] = "fake-key"
-        setup_settings()
+    """Initialize LlamaIndex Settings with mocks — avoids real API calls in tests."""
+    # Ensure API key exists so setup_settings() doesn't raise
+    os.environ.setdefault("GEMINI_API_KEY", "fake-key-for-testing")
+    os.environ.setdefault("GOOGLE_API_KEY", "fake-key-for-testing")
+
+    # Configure Settings with mocks directly — bypass setup_settings() which
+    # would try to instantiate real Gemini clients.
+    Settings.llm = MockLLM()
+    Settings.embed_model = MockEmbedding(embed_dim=768)
+    Settings.node_parser = MarkdownNodeParser()
+    Settings.system_prompt = "Test system prompt."
+
+    yield
+
+    # Cleanup: reset settings
+    Settings.llm = None
+    Settings.embed_model = None
+
 
 @pytest.fixture
 def temp_chroma_db(tmp_path):
     """Provides a temporary path for Chroma DB."""
     return str(tmp_path / "test_chroma_db")
 
+
 @pytest.fixture
 def temp_metadata_path(tmp_path):
     """Provides a temporary path for index metadata."""
-    return str(tmp_path / "test_metadata")
+    path = tmp_path / "test_metadata"
+    path.mkdir(exist_ok=True)
+    return str(path)

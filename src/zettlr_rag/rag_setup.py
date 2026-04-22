@@ -103,12 +103,12 @@ def load_academic_markdown(directory: str) -> list:
         exclude_hidden=True,
     )
     documents = reader.load_data()
-
-    # Stable doc IDs based on file path
+    # Stable IDs based on file path (for refresh_ref_docs to detect unchanged docs)
     for doc in documents:
-        doc.doc_id = doc.metadata["file_path"]
+        doc.id_ = doc.metadata["file_path"]  # ← change from doc.doc_id to doc.id_
 
     return documents
+
 
 
 async def main_async(

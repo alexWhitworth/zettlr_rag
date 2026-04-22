@@ -32,9 +32,9 @@ class NewPaperHandler(FileSystemEventHandler):
         reader = SimpleDirectoryReader(input_files=[file_path])
         documents = reader.load_data()
 
-        # 2. Set stable doc ID based on file path (consistent with rag_setup.py)
+        # 2. Set stable ID based on file path (consistent with rag_setup.py)
         for doc in documents:
-            doc.doc_id = doc.metadata["file_path"]
+            doc.id_ = doc.metadata["file_path"]  # ← change from doc.doc_id to doc.id_
 
         # 3. Refresh the index for these specific documents
         refreshed_docs = self.index.refresh_ref_docs(documents)
