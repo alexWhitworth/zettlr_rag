@@ -19,7 +19,6 @@ def mock_settings():
     Settings.llm = MockLLM()
     Settings.embed_model = MockEmbedding(embed_dim=768)
     Settings.node_parser = MarkdownNodeParser()
-    Settings.system_prompt = "Test system prompt."
 
     yield
 
