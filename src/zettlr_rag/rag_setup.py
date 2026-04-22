@@ -22,39 +22,14 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class RateLimitedEmbedding(GoogleGenAIEmbedding):
-    """
-    Wraps GoogleGenAIEmbedding with a sleep between batch requests to stay
-    under Gemini API rate limits. Uses the parent's native batch endpoint
-    (batchEmbedContents) so a batch of N texts = 1 API request.
-    """
-    sleep_seconds: float = 1.0  # must declare as class field for pydantic
-
-    def __init__(self, sleep_seconds: float = 1.0, **kwargs):
-        super().__init__(**kwargs)
-        self.sleep_seconds = sleep_seconds
-
-    def _get_text_embedding(self, text: str) -> List[float]:
-        time.sleep(self.sleep_seconds)
-        return super()._get_text_embedding(text)
-
-    def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
-        if not texts:
-            return []
-        logger.info(f"Embedding {len(texts)} texts (sync) via native batch")
-        time.sleep(self.sleep_seconds)
-        return super()._get_text_embeddings(texts)
-
-    async def _aget_text_embedding(self, text: str) -> List[float]:
-        await asyncio.sleep(self.sleep_seconds)
-        return await super()._aget_text_embedding(text)
-
-    async def _aget_text_embeddings(self, texts: List[str]) -> List[List[float]]:
-        if not texts:
-            return []
-        logger.info(f"Embedding {len(texts)} texts (async) via native batch")
-        await asyncio.sleep(self.sleep_seconds)
-        return await super()._aget_text_embeddings(texts)
+SYSTEM_PROMPT = (
+    "I am a Senior Staff Data Scientist, Algorithms. When I ask technical or research questions, "
+    "provide high-level scientific detail and include paper citations (bibtex format). "
+    "Use clean Markdown formatting with clear headers, bold text for key terms, and LaTeX for math. "
+    "Prefer Python for all code examples. Assume a high level of statistical and algorithmic understanding. "
+    "Provide sufficient detail to produce complete answers, but prefer brevity to unnecessarily verbose responses. "
+    "Do not include conversational filler—start directly with the content."
+)
 
 
 def setup_settings() -> None:
@@ -62,8 +37,7 @@ def setup_settings() -> None:
     load_dotenv()
     if not os.getenv("GEMINI_API_KEY"):
         raise ValueError("API Key not found. Check your .env file.")
-    
-    # Ensure GOOGLE_API_KEY is also set as some underlying SDKs expect it
+
     if not os.getenv("GOOGLE_API_KEY"):
         os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
 
@@ -71,24 +45,35 @@ def setup_settings() -> None:
         model="models/gemini-3-flash-preview", api_key=os.getenv("GEMINI_API_KEY")
     )
 
-    Settings.embed_model = RateLimitedEmbedding(
+    # Use the stock GoogleGenAIEmbedding — its built-in retry handles 429s
+    embed_model = GoogleGenAIEmbedding(
         model_name="models/gemini-embedding-2-preview",
         api_key=os.getenv("GEMINI_API_KEY"),
         embed_batch_size=10,
         retry_min_seconds=10,
         retries=10,
-        sleep_seconds=1.0,  # Add a delay between embedding calls to respect rate limits
     )
 
-    Settings.system_prompt = (
-        "I am a Senior Staff Data Scientist, Algorithms. When I ask technical or research questions, "
-        "provide high-level scientific detail and include paper citations (bibtex format). "
-        "Use clean Markdown formatting with clear headers, bold text for key terms, and LaTeX for math. "
-        "Prefer Python for all code examples. Assume a high level of statistical and algorithmic understanding. "
-        "Provide sufficient detail to produce complete answers, but prefer brevity to unnecessarily verbose responses. "
-        "Do not include conversational filler—start directly with the content."
-    )
+    # Monkey-patch a sleep before each batch call
+    original_get_batch = embed_model._get_text_embeddings
+    original_aget_batch = embed_model._aget_text_embeddings
 
+    def rate_limited_batch(texts):
+        if texts:
+            logger.info(f"Embedding batch of {len(texts)}")
+            time.sleep(1.0)
+        return original_get_batch(texts)
+
+    async def rate_limited_abatch(texts):
+        if texts:
+            logger.info(f"Embedding batch of {len(texts)} (async)")
+            await asyncio.sleep(1.0)
+        return await original_aget_batch(texts)
+
+    embed_model._get_text_embeddings = rate_limited_batch
+    embed_model._aget_text_embeddings = rate_limited_abatch
+
+    Settings.embed_model = embed_model
     Settings.node_parser = MarkdownNodeParser()
 
 
@@ -186,7 +171,10 @@ async def main_async(
     # 4. Final Verification Query
     if run_verification:
         print("\n📝 Running verification query...")
-        query_engine = index.as_query_engine(similarity_top_k=20)
+        query_engine = index.as_query_engine(
+            similarity_top_k=20,
+            system_prompt=SYSTEM_PROMPT,
+        )
         response = query_engine.query(
             "Summarize the shrinkage can be used to improve experiment estimates and their precision."
         )
