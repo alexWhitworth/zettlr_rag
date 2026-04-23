@@ -14,7 +14,7 @@ from llama_index.core.vector_stores import (
 )
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from zettlr_rag.rag_setup import setup_settings
+from zettlr_rag.rag_setup import setup_settings, SYSTEM_PROMPT
 
 
 def get_query_engine(filters=None):
@@ -26,7 +26,7 @@ def get_query_engine(filters=None):
     index = VectorStoreIndex.from_vector_store(vector_store)
 
     return index.as_query_engine(
-        similarity_top_k=20, filters=filters, system_prompt=Settings.system_prompt
+        similarity_top_k=20, filters=filters, system_prompt=SYSTEM_PROMPT
     )
 
 

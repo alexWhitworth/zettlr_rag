@@ -230,7 +230,8 @@ async def main_async(
             similarity_top_k=20,
             system_prompt=SYSTEM_PROMPT,
         )
-        response = query_engine.query(
+        # Use async query to avoid nested asyncio.run() conflict
+        response = await query_engine.aquery(
             "Summarize the shrinkage can be used to improve experiment estimates and their precision."
         )
         print(f"\n# Query Response\n{response}")
