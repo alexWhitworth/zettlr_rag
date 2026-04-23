@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: zettlr-rag
-Version: 0.2.0
+Version: 0.3.0
 Summary: RAG for my academic papers library
 License: MIT
 Classifier: License :: OSI Approved :: MIT License
@@ -144,8 +144,42 @@ The system uses a **Senior Staff Data Scientist** persona:
 - **Python** preferred for code examples.
 - **Pure Markdown** output for direct file redirection/chaining.
 
+## Testing
+
+The project uses `pytest` for testing. The tests are designed to be isolated and use temporary directories for ChromaDB and metadata to avoid impacting your production data.
+
+### Running Tests
+To run all tests:
+```bash
+uv run pytest
+```
+
+### Test Coverage
+The tests cover:
+- **RAG Setup**: Initializing settings, loading documents, and the full indexing pipeline (using mocks to avoid API calls).
+- **File Watcher**: Processing and indexing new files.
+- **Isolated Environments**: Verification that tests do not modify `chroma_db_academic` or `.index_metadata`.
+
 ## Implementation Details
 - **Structural Parsing**: Uses `MarkdownNodeParser` to preserve headers and logical sections.
 - **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing double-indexing.
 - **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
 - **Persistent Storage**: Database stored in `./chroma_db_academic`.
+
+### Appendix: checking the chroma_db size:
+
+```bash:
+du -sh ./chroma_db_academic # file size
+
+# number of chunks and docs
+uv run python -c 'import chromadb
+client = chromadb.PersistentClient(path="./chroma_db_academic")
+col = client.get_collection("research_papers")
+
+# Check how many unique source docs are indexed
+results = col.get(include=["metadatas"])
+sources = set(m.get("file_name") or m.get("file_path") for m in results["metadatas"])
+print(f"Number of chunks: {col.count()}") 
+print(f"Unique source docs: {len(sources)}")
+'
+```

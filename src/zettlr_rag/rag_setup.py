@@ -54,25 +54,6 @@ def setup_settings() -> None:
         retries=10,
     )
 
-    # Monkey-patch a sleep before each batch call
-    original_get_batch = embed_model._get_text_embeddings
-    original_aget_batch = embed_model._aget_text_embeddings
-
-    def rate_limited_batch(texts):
-        if texts:
-            logger.info(f"Embedding batch of {len(texts)}")
-            time.sleep(1.0)
-        return original_get_batch(texts)
-
-    async def rate_limited_abatch(texts):
-        if texts:
-            logger.info(f"Embedding batch of {len(texts)} (async)")
-            await asyncio.sleep(1.0)
-        return await original_aget_batch(texts)
-
-    embed_model._get_text_embeddings = rate_limited_batch
-    embed_model._aget_text_embeddings = rate_limited_abatch
-
     Settings.embed_model = embed_model
     Settings.node_parser = MarkdownNodeParser()
 
@@ -114,7 +95,7 @@ async def main_async(
     chroma_collection = db.get_or_create_collection("research_papers")
     vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
-    # 2. Load or Initialize Storage Context (with DocStore for Hash tracking)
+    # 2. Load or Initialize Storage Context
     if os.path.exists(metadata_path) and os.listdir(metadata_path):
         print("Loading existing index metadata...")
         storage_context = StorageContext.from_defaults(
@@ -126,49 +107,102 @@ async def main_async(
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
         index = VectorStoreIndex([], storage_context=storage_context)
 
-    # 3. Smart Sync: Refresh Index in batches with checkpointing
-    print(
-        f"🔄 Smart Sync: Processing {len(documents)} docs in batches of "
-        f"{checkpoint_batch_size}..."
-    )
-    total_updated = 0
-    total_batches = (len(documents) + checkpoint_batch_size - 1) // checkpoint_batch_size
+    # 3. Smart Sync: Manual embedding + direct vector store insertion
+    # (Bypasses refresh_ref_docs which has a KeyError bug)
+    print(f"🔄 Manual Sync: Processing {len(documents)} docs...")
+
+    # Get existing doc IDs and hashes from docstore
+    existing_hashes = {}
+    for doc_id in list(index.docstore.docs.keys()):
+        existing_hashes[doc_id] = index.docstore.get_document_hash(doc_id)
+
+    # Filter to only new or changed docs
+    docs_to_process = []
+    docs_to_delete = []
+    for doc in documents:
+        current_hash = doc.hash
+        existing_hash = existing_hashes.get(doc.id_)
+        if existing_hash is None:
+            docs_to_process.append(doc)  # new
+        elif existing_hash != current_hash:
+            docs_to_delete.append(doc.id_)  # changed — delete then re-add
+            docs_to_process.append(doc)
+        # else: unchanged, skip
+
+    print(f"📊 Sync plan: {len(docs_to_process)} to embed, {len(docs_to_delete)} to delete first, {len(documents) - len(docs_to_process)} unchanged")
+
+    # Delete changed docs first
+    for doc_id in docs_to_delete:
+        try:
+            index.delete_ref_doc(doc_id, delete_from_docstore=True)
+        except Exception as e:
+            logger.warning(f"Could not delete {doc_id}: {e}")
+
+    # Parse docs into nodes
+    parser = Settings.node_parser
+    total_processed = 0
+    total_batches = (len(docs_to_process) + checkpoint_batch_size - 1) // checkpoint_batch_size
 
     try:
-        for i in range(0, len(documents), checkpoint_batch_size):
-            batch = documents[i : i + checkpoint_batch_size]
+        for i in range(0, len(docs_to_process), checkpoint_batch_size):
+            batch_docs = docs_to_process[i : i + checkpoint_batch_size]
             batch_num = i // checkpoint_batch_size + 1
-            print(
-                f"\n📦 Batch {batch_num}/{total_batches} "
-                f"({len(batch)} docs, {i + len(batch)}/{len(documents)} total)..."
-            )
 
-            refreshed = index.refresh_ref_docs(batch, show_progress=True)
-            batch_updated = sum(refreshed)
-            total_updated += batch_updated
+            print(f"\n📦 Batch {batch_num}/{total_batches} ({len(batch_docs)} docs)...")
 
-            # Checkpoint: persist after every batch
+            # Parse batch into nodes
+            nodes = parser.get_nodes_from_documents(batch_docs)
+            print(f"   Parsed into {len(nodes)} nodes")
+
+            # Filter out tiny nodes (< 20 chars)
+            nodes = [n for n in nodes if len(n.get_content().strip()) >= 20]
+            print(f"   {len(nodes)} nodes after filtering tiny ones")
+
+            if not nodes:
+                continue
+
+            # Embed in sub-batches of 10
+            embed_batch = 10
+            for j in range(0, len(nodes), embed_batch):
+                sub = nodes[j : j + embed_batch]
+                texts = [n.get_content(metadata_mode="embed") for n in sub]
+                embeddings = Settings.embed_model.get_text_embedding_batch(
+                    texts, show_progress=False
+                )
+                for node, emb in zip(sub, embeddings):
+                    node.embedding = emb
+
+            # Add to vector store
+            vector_store.add(nodes)
+
+            # Add to docstore (for hash tracking)
+            for doc in batch_docs:
+                index.docstore.set_document_hash(doc.id_, doc.hash)
+                index.docstore.add_documents([doc], allow_update=True)
+
+            total_processed += len(batch_docs)
+
+            # Persist checkpoint
             index.storage_context.persist(persist_dir=metadata_path)
-            print(
-                f"💾 Checkpoint saved. Batch updated: {batch_updated}, "
-                f"total updated: {total_updated}"
-            )
+            print(f"💾 Checkpoint: {total_processed}/{len(docs_to_process)} docs processed")
+
     except KeyboardInterrupt:
         print("\n⚠️  Interrupted — persisting final state before exit...")
         index.storage_context.persist(persist_dir=metadata_path)
-        print(f"💾 State saved. Updated {total_updated} docs before interrupt.")
+        print(f"💾 State saved. Processed {total_processed} docs before interrupt.")
         raise
     except Exception as e:
         print(f"\n❌ Error during sync: {e}")
-        print("Attempting to persist state before exit...")
+        import traceback
+        traceback.print_exc()
         index.storage_context.persist(persist_dir=metadata_path)
-        print(f"💾 State saved. Updated {total_updated} docs before error.")
+        print(f"💾 State saved. Processed {total_processed} docs before error.")
         raise
 
-    print(f"\n✅ Sync complete. Updated/Added {total_updated} documents total.")
+    print(f"\n✅ Sync complete. Processed {total_processed} documents total.")
     print(f"💾 Final metadata persisted to {metadata_path}")
 
-    # 4. Final Verification Query
+    # 4. Verification Query
     if run_verification:
         print("\n📝 Running verification query...")
         query_engine = index.as_query_engine(
@@ -179,6 +213,7 @@ async def main_async(
             "Summarize the shrinkage can be used to improve experiment estimates and their precision."
         )
         print(f"\n# Query Response\n{response}")
+
 
 
 def main() -> None:
