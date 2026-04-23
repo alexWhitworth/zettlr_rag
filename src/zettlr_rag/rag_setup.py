@@ -32,6 +32,30 @@ SYSTEM_PROMPT = (
     "Do not include conversational filler—start directly with the content."
 )
 
+def sanitize_metadata(metadata: dict) -> dict:
+    """
+    Flatten metadata for ChromaDB compatibility.
+    ChromaDB only accepts str, int, float, or None as metadata values.
+
+    - Lists are joined into comma-separated strings (e.g. authors, tags).
+    - Dicts are JSON-serialized to strings.
+    - Anything else non-scalar is cast to str.
+    """
+    sanitized = {}
+    for key, value in metadata.items():
+        if isinstance(value, (str, int, float)) or value is None:
+            sanitized[key] = value
+        elif isinstance(value, list):
+            # Join list of strings; convert non-strings to str first
+            sanitized[key] = ", ".join(str(v) for v in value)
+        elif isinstance(value, dict):
+            import json
+            sanitized[key] = json.dumps(value)
+        else:
+            sanitized[key] = str(value)
+    return sanitized
+
+
 
 def setup_settings() -> None:
     """Initialize global LlamaIndex settings."""
@@ -76,17 +100,14 @@ def process_documents_metadata(documents: list[Document], directory: str) -> lis
         if "category" not in doc.metadata or not doc.metadata["category"]:
             rel_path = os.path.relpath(doc.metadata["file_path"], directory)
             path_parts = rel_path.split(os.sep)
-            if len(path_parts) > 1:
-                doc.metadata["category"] = path_parts[0]
-            else:
-                doc.metadata["category"] = "Uncategorized"
+            doc.metadata["category"] = path_parts[0] if len(path_parts) > 1 else "Uncategorized"
         if "year" not in doc.metadata or not doc.metadata["year"]:
             # Try to find a 4-digit year in the path or filename
             match = re.search(r"(19|20)\d{2}", doc.metadata["file_name"])
-            if match:
-                doc.metadata["year"] = int(match.group(0))
-            else:
-                doc.metadata["year"] = "N/A"
+            doc.metadata["year"] = int(match.group(0)) if match else "N/A"
+        
+        # 5. Sanitize all metadata for ChromaDB compatibility
+        doc.metadata = sanitize_metadata(doc.metadata)
 
     return documents
 
