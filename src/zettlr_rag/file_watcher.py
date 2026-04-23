@@ -4,17 +4,18 @@ import time
 
 import chromadb
 from llama_index.core import Settings, SimpleDirectoryReader, StorageContext, VectorStoreIndex
+from llama_index.vector_stores.chroma import ChromaVectorStore
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from zettlr_rag.rag_setup import setup_settings
-from llama_index.vector_stores.chroma import ChromaVectorStore
+from zettlr_rag.rag_setup import process_documents_metadata, setup_settings
 
 
 class NewPaperHandler(FileSystemEventHandler):
-    def __init__(self, index, metadata_path, node_parser=None):
+    def __init__(self, index, metadata_path, base_path, node_parser=None):
         self.index = index
         self.metadata_path = metadata_path
+        self.base_path = base_path
         self.node_parser = node_parser or Settings.node_parser
 
     def on_created(self, event):
@@ -32,13 +33,12 @@ class NewPaperHandler(FileSystemEventHandler):
         reader = SimpleDirectoryReader(input_files=[file_path])
         documents = reader.load_data()
 
-        # 2. Set stable ID based on file path (consistent with rag_setup.py)
-        for doc in documents:
-            doc.id_ = doc.metadata["file_path"]  # ← change from doc.doc_id to doc.id_
+        # 2. Extract YAML and fallback metadata
+        documents = process_documents_metadata(documents, self.base_path)
 
         # 3. Refresh the index for these specific documents
         refreshed_docs = self.index.refresh_ref_docs(documents)
-        
+
         if any(refreshed_docs):
             print(f"✅ Successfully updated index for {os.path.basename(file_path)}")
             # 4. Persist metadata
@@ -49,7 +49,7 @@ class NewPaperHandler(FileSystemEventHandler):
 
 
 def start_monitor(
-    path_to_watch: str, 
+    path_to_watch: str,
     chroma_path: str = "./chroma_db_academic",
     metadata_path: str = "./.index_metadata"
 ) -> None:
@@ -74,7 +74,7 @@ def start_monitor(
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
         index = VectorStoreIndex([], storage_context=storage_context)
 
-    event_handler = NewPaperHandler(index, metadata_path)
+    event_handler = NewPaperHandler(index, metadata_path, path_to_watch)
     observer = Observer()
     observer.schedule(event_handler, path_to_watch, recursive=True)
 

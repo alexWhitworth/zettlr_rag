@@ -1,12 +1,13 @@
 import asyncio
-import os
-import time
 import logging
-from typing import List
+import os
+import re
 
 import chromadb
+import frontmatter
 from dotenv import load_dotenv
 from llama_index.core import (
+    Document,
     Settings,
     SimpleDirectoryReader,
     StorageContext,
@@ -58,7 +59,39 @@ def setup_settings() -> None:
     Settings.node_parser = MarkdownNodeParser()
 
 
-def load_academic_markdown(directory: str) -> list:
+def process_documents_metadata(documents: list[Document], directory: str) -> list[Document]:
+    """Extract YAML frontmatter and add fallback metadata to documents."""
+    for doc in documents:
+        # 1. Parse frontmatter
+        post = frontmatter.loads(doc.text)
+
+        # 2. Update doc content and metadata
+        doc.set_content(post.content)
+        doc.metadata.update(post.metadata)
+
+        # 3. Stable IDs based on file path
+        doc.id_ = doc.metadata["file_path"]
+
+        # 4. Fallback for category and year if not in YAML
+        if "category" not in doc.metadata or not doc.metadata["category"]:
+            rel_path = os.path.relpath(doc.metadata["file_path"], directory)
+            path_parts = rel_path.split(os.sep)
+            if len(path_parts) > 1:
+                doc.metadata["category"] = path_parts[0]
+            else:
+                doc.metadata["category"] = "Uncategorized"
+        if "year" not in doc.metadata or not doc.metadata["year"]:
+            # Try to find a 4-digit year in the path or filename
+            match = re.search(r"(19|20)\d{2}", doc.metadata["file_name"])
+            if match:
+                doc.metadata["year"] = int(match.group(0))
+            else:
+                doc.metadata["year"] = "N/A"
+
+    return documents
+
+
+def load_academic_markdown(directory: str) -> list[Document]:
     """Load MD Files while preserving YAML Metadata."""
     if not os.path.exists(directory):
         raise FileNotFoundError(f"Directory not found: {directory}")
@@ -69,11 +102,7 @@ def load_academic_markdown(directory: str) -> list:
         exclude_hidden=True,
     )
     documents = reader.load_data()
-    # Stable IDs based on file path (for refresh_ref_docs to detect unchanged docs)
-    for doc in documents:
-        doc.id_ = doc.metadata["file_path"]  # ← change from doc.doc_id to doc.id_
-
-    return documents
+    return process_documents_metadata(documents, directory)
 
 
 
