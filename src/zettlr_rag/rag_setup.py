@@ -161,16 +161,37 @@ async def main_async(
             if not nodes:
                 continue
 
-            # Embed in sub-batches of 10
-            embed_batch = 10
-            for j in range(0, len(nodes), embed_batch):
-                sub = nodes[j : j + embed_batch]
-                texts = [n.get_content(metadata_mode="embed") for n in sub]
-                embeddings = Settings.embed_model.get_text_embedding_batch(
-                    texts, show_progress=False
-                )
-                for node, emb in zip(sub, embeddings):
-                    node.embedding = emb
+            # Embed in sub-batches of 10 [not working]
+            # switch to: Embed one at a time (more reliable than batch, avoids silent drops)
+            print(f"   Embedding {len(nodes)} nodes individually...")
+            embedded_count = 0
+            failed_nodes = []
+            for n_idx, node in enumerate(nodes):
+                text = node.get_content(metadata_mode="embed")
+                try:
+                    node.embedding = Settings.embed_model.get_text_embedding(text)
+                    embedded_count += 1
+                except Exception as e:
+                    logger.warning(f"   Failed to embed node {n_idx} ({node.metadata.get('file_name', 'unknown')}): {e}")
+                    failed_nodes.append(node)
+
+                if (n_idx + 1) % 25 == 0:
+                    print(f"   Embedded {n_idx + 1}/{len(nodes)}")
+
+            print(f"   Embedded {embedded_count}/{len(nodes)} nodes ({len(failed_nodes)} failed)")
+
+            # Filter out failed nodes
+            nodes = [n for n in nodes if n.embedding is not None]
+
+            # Verify all nodes have embeddings before adding
+            missing = [n for n in nodes if n.embedding is None]
+            if missing:
+                logger.warning(f"   {len(missing)} nodes missing embeddings — filtering out")
+                nodes = [n for n in nodes if n.embedding is not None]
+
+            if not nodes:
+                print(f"   No valid nodes to add in batch {batch_num}")
+                continue
 
             # Add to vector store
             vector_store.add(nodes)
@@ -213,7 +234,6 @@ async def main_async(
             "Summarize the shrinkage can be used to improve experiment estimates and their precision."
         )
         print(f"\n# Query Response\n{response}")
-
 
 
 def main() -> None:
