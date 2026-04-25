@@ -1,34 +1,48 @@
 import os
 import sys
 import time
+from typing import Any
 
 import chromadb
 from llama_index.core import Settings, SimpleDirectoryReader, StorageContext, VectorStoreIndex
+from llama_index.core.indices.base import BaseIndex
 from llama_index.vector_stores.chroma import ChromaVectorStore
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from zettlr_rag.rag_setup import process_documents_metadata, setup_settings
 
 
 class NewPaperHandler(FileSystemEventHandler):
-    def __init__(self, index, metadata_path, base_path, node_parser=None):
+    def __init__(
+        self,
+        index: BaseIndex[Any],
+        metadata_path: str,
+        base_path: str,
+        node_parser: Any | None = None,
+    ) -> None:
         self.index = index
         self.metadata_path = metadata_path
         self.base_path = base_path
         self.node_parser = node_parser or Settings.node_parser
 
-    def on_created(self, event):
-        if not event.is_directory and event.src_path.endswith(".md"):
-            print(f"🚀 New research detected: {event.src_path}")
-            self.process_file(event.src_path)
+    def on_created(self, event: FileSystemEvent) -> None:
+        src_path = event.src_path
+        if isinstance(src_path, bytes):
+            src_path = src_path.decode()
+        if not event.is_directory and src_path.endswith(".md"):
+            print(f"🚀 New research detected: {src_path}")
+            self.process_file(src_path)
 
-    def on_modified(self, event):
-        if not event.is_directory and event.src_path.endswith(".md"):
-            print(f"📝 Research modified: {event.src_path}")
-            self.process_file(event.src_path)
+    def on_modified(self, event: FileSystemEvent) -> None:
+        src_path = event.src_path
+        if isinstance(src_path, bytes):
+            src_path = src_path.decode()
+        if not event.is_directory and src_path.endswith(".md"):
+            print(f"📝 Research modified: {src_path}")
+            self.process_file(src_path)
 
-    def process_file(self, file_path):
+    def process_file(self, file_path: str) -> None:
         # 1. Load the specific file
         reader = SimpleDirectoryReader(input_files=[file_path])
         documents = reader.load_data()
@@ -45,13 +59,13 @@ class NewPaperHandler(FileSystemEventHandler):
             self.index.storage_context.persist(persist_dir=self.metadata_path)
             print(f"💾 Metadata persisted to {self.metadata_path}")
         else:
-            print(f"ℹ️ No changes detected in {os.path.basename(file_path)}")
+            print(f"info: No changes detected in {os.path.basename(file_path)}")
 
 
 def start_monitor(
     path_to_watch: str,
     chroma_path: str = "./chroma_db_academic",
-    metadata_path: str = "./.index_metadata"
+    metadata_path: str = "./.index_metadata",
 ) -> None:
     # This will now initialize GoogleGenAI with gemini-3-flash-preview
     setup_settings()
@@ -63,6 +77,7 @@ def start_monitor(
 
     # Load the index or initialize new one
     from llama_index.core import load_index_from_storage
+
     if os.path.exists(metadata_path) and os.listdir(metadata_path):
         print(f"Loading existing index metadata from {metadata_path}...")
         storage_context = StorageContext.from_defaults(
@@ -90,7 +105,11 @@ def start_monitor(
 
 def main() -> None:
     # Default to the full library root
-    path = "/Users/awhitworth/Library/CloudStorage/ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers"
+    default_path = (
+        "/Users/awhitworth/Library/CloudStorage/"
+        "ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers"
+    )
+    path = default_path
     if len(sys.argv) > 1:
         path = sys.argv[1]
 

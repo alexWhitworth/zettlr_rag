@@ -2,7 +2,6 @@ README.md
 pyproject.toml
 src/zettlr_rag/__init__.py
 src/zettlr_rag/file_watcher.py
-src/zettlr_rag/main.py
 src/zettlr_rag/rag_setup.py
 src/zettlr_rag.egg-info/PKG-INFO
 src/zettlr_rag.egg-info/SOURCES.txt
@@ -10,4 +9,6 @@ src/zettlr_rag.egg-info/dependency_links.txt
 src/zettlr_rag.egg-info/requires.txt
 src/zettlr_rag.egg-info/top_level.txt
 tests/test_file_watcher.py
+tests/test_metadata_persistence.py
 tests/test_rag_setup.py
+tests/test_smart_sync.py

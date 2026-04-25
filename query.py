@@ -5,16 +5,15 @@ import sys
 
 import chromadb
 import nest_asyncio
-from llama_index.core import Settings, VectorStoreIndex
+from llama_index.core import VectorStoreIndex
 from llama_index.core.vector_stores import (
     FilterCondition,
-    FilterOperator,
     MetadataFilter,
     MetadataFilters,
 )
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from zettlr_rag.rag_setup import setup_settings, SYSTEM_PROMPT
+from zettlr_rag.rag_setup import SYSTEM_PROMPT, setup_settings
 
 
 def get_query_engine(filters=None):
@@ -25,9 +24,7 @@ def get_query_engine(filters=None):
     vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
     index = VectorStoreIndex.from_vector_store(vector_store)
 
-    return index.as_query_engine(
-        similarity_top_k=20, filters=filters, system_prompt=SYSTEM_PROMPT
-    )
+    return index.as_query_engine(similarity_top_k=20, filters=filters, system_prompt=SYSTEM_PROMPT)
 
 
 def parse_complex_filters(filter_data):
@@ -82,12 +79,12 @@ def main():
     if args.filter_json:
         # Check if it's a file path or raw JSON
         if os.path.exists(args.filter_json):
-            with open(args.filter_json, "r") as f:
+            with open(args.filter_json) as f:
                 filter_data = json.load(f)
         else:
             filter_data = json.loads(args.filter_json)
 
-        print(f"Applying complex filters", file=sys.stderr)
+        print("Applying complex filters", file=sys.stderr)
         filters = parse_complex_filters(filter_data)
     else:
         # Simple AND logic from flags
@@ -114,7 +111,8 @@ def main():
     for node in response.source_nodes:
         m = node.metadata
         print(
-            f"- {m.get('file_name', 'Unknown')} [{m.get('category', 'N/A')}, {m.get('year', 'N/A')}] (Score: {node.get_score():.2f})",
+            f"- {m.get('file_name', 'Unknown')} [{m.get('category', 'N/A')}, "
+            f"{m.get('year', 'N/A')}] (Score: {node.get_score():.2f})",
             file=sys.stderr,
         )
 
