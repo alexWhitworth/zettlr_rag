@@ -298,7 +298,6 @@ class AcademicRAGSync:
         """Batch process and index documents."""
         if self.index is None or self.vector_store is None:
             raise RuntimeError("Index or vector store not initialized.")
-
         if not documents:
             return 0
 
@@ -335,8 +334,7 @@ class AcademicRAGSync:
                 continue
 
             # Add to vector store and docstore
-            self.vector_store.add(nodes)
-            self.index.docstore.add_documents(nodes, allow_update=True)
+            self.index.insert_nodes(nodes)
             for doc in batch_docs:
                 self.index.docstore.set_document_hash(doc.id_, doc.hash)
                 self.index.docstore.add_documents([doc], allow_update=True)
