@@ -1,4 +1,5 @@
 import os
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -91,7 +92,7 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
 
         await sync_manager.run_sync(run_verification=False)
         captured = capsys.readouterr()
-        assert "moved files to update metadata" in captured.out
+        assert "2 moved files to update metadata" in captured.out
         assert "Moving: paper2.md" in captured.out
 
         # --- PHASE 4: Pruning ---

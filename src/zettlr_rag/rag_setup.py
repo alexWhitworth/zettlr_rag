@@ -17,7 +17,11 @@ from llama_index.core import (
     load_index_from_storage,
 )
 from llama_index.core.node_parser import MarkdownNodeParser
-from llama_index.core.schema import MetadataMode, NodeRelationship, RelatedNodeInfo
+from llama_index.core.schema import (
+    MetadataMode,
+    NodeRelationship,
+    RelatedNodeInfo,
+)
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
@@ -279,6 +283,8 @@ class AcademicRAGSync:
             except Exception as e:
                 logger.error(f"Failed to move {s_id}: {e}")
                 failed_moves.append(n_doc)
+
+        self.index.storage_context.persist(persist_dir=self.metadata_path)
         return failed_moves
 
     def execute_deletions(self, doc_ids: list[str], is_stale: bool = True) -> None:
@@ -333,15 +339,20 @@ class AcademicRAGSync:
             if not nodes:
                 continue
 
-            # Add to vector store and docstore
-            self.index.insert_nodes(nodes)
+            # 1. Write vectors to ChromaDB
+            self.vector_store.add(nodes)
+
+            # 2. Register source docs first — docstore uses SOURCE relationship to populate ref_doc_info
             for doc in batch_docs:
-                self.index.docstore.set_document_hash(doc.id_, doc.hash)
                 self.index.docstore.add_documents([doc], allow_update=True)
+                self.index.docstore.set_document_hash(doc.id_, doc.hash)
+
+            # 3. Add nodes — docstore walks SOURCE relationships and wires up ref_doc_info
+            self.index.docstore.add_documents(nodes, allow_update=True)
 
             total_processed += len(batch_docs)
             self.index.storage_context.persist(persist_dir=self.metadata_path)
-            logger.info(f"💾 Checkpoint: {total_processed}/{len(documents)} docs processed")
+            logger.info(f"💾 Checkpoint: {total_processed}/{total_docs} docs processed")
 
         return total_processed
 
