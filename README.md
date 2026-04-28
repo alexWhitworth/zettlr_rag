@@ -2,22 +2,38 @@
 
 A specialized Retrieval-Augmented Generation (RAG) system for academic paper libraries. This system implements **MD-RAG** (Metadata RAG), preserving and utilizing YAML frontmatter from Zettlr markdown files for high-precision scientific retrieval.
 
-## Tech Stack
-- **LLM**: Gemini 3 Flash Preview (`gemini-3-flash-preview`)
-- **Embeddings**: Gemini Embedding 2 Preview (`gemini-embedding-2-preview`)
-- **Vector Store**: ChromaDB (Persistent)
-- **Persona**: Senior Staff Data Scientist, Algorithms
-
 ## Installation
 
 ```bash
 uv pip install -e .
 ```
 
+### Initialization
+
+Historical papers were first summarized via a `RESEARCH_AGENT.md` SKILL using Claude Opus 4.6, which 
+utilizes clear markdown formatting aligned with MD-RAG. New papers are added utilizing the same 
+SKILL. This is the most expensive step in setup.
+
+The markdown summaries, and not the raw PDFs, are then submitted to the embeddings model and used 
+in the RAG.
+
+### Tech Stack
+- **LLM**: Gemini 3 Flash Preview (`gemini-3-flash-preview`)
+- **Embeddings**: Gemini Embedding 2 Preview (`gemini-embedding-2-preview`)
+- **Vector Store**: ChromaDB (Persistent)
+- **Persona**: Senior Staff Data Scientist, Algorithms
+
+### Implementation Details
+- **Structural Parsing**: Uses `MarkdownNodeParser` to preserve headers and logical sections.
+- **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing double-indexing.
+- **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
+- **Persistent Storage**: Database stored in `./chroma_db_academic`.
+
 ## Usage
 
 ### 1. Smart Sync (Setup & Maintenance)
-The `zettlr-rag-setup` command uses **Smart Sync** logic. It tracks file hashes in `./.index_metadata` to perform incremental updates.
+The `zettlr-rag-setup` command uses **Smart Sync** logic. It tracks file hashes in `./.index_metadata` 
+to perform incremental updates.
 
 - **Initial Run**: Processes your entire library.
 - **Subsequent Runs**: Detects and indexes **only** new or modified files.
@@ -27,14 +43,7 @@ The `zettlr-rag-setup` command uses **Smart Sync** logic. It tracks file hashes 
 zettlr-rag-setup
 ```
 
-### 2. Live Monitoring (Optional)
-If you prefer real-time updates while you write, run the watcher. It will automatically trigger indexing for any file you save.
-
-```bash
-zettlr-rag-watch
-```
-
-### 3. Querying
+### 2. Querying
 
 #### CLI Usage
 The `query.py` script is the primary entry point for terminal-based research.
@@ -127,10 +136,12 @@ The system uses a **Senior Staff Data Scientist** persona:
 
 ## Testing
 
-The project uses `pytest` for testing. The tests are designed to be isolated and use temporary directories for ChromaDB and metadata to avoid impacting your production data.
+The project uses `pytest` for testing. The tests are designed to be isolated and use temporary 
+directories for ChromaDB and metadata to avoid impacting your production data.
 
 ### Running Tests
 To run all tests:
+
 ```bash
 uv run pytest
 ```
@@ -138,14 +149,7 @@ uv run pytest
 ### Test Coverage
 The tests cover:
 - **RAG Setup**: Initializing settings, loading documents, and the full indexing pipeline (using mocks to avoid API calls).
-- **File Watcher**: Processing and indexing new files.
 - **Isolated Environments**: Verification that tests do not modify `chroma_db_academic` or `.index_metadata`.
-
-## Implementation Details
-- **Structural Parsing**: Uses `MarkdownNodeParser` to preserve headers and logical sections.
-- **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing double-indexing.
-- **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
-- **Persistent Storage**: Database stored in `./chroma_db_academic`.
 
 ### Appendix: checking the chroma_db size:
 
