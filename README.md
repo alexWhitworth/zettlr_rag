@@ -8,6 +8,8 @@ A specialized Retrieval-Augmented Generation (RAG) system for academic paper lib
 uv pip install -e .
 ```
 
+## Architectural Design
+
 ### Initialization
 
 Historical papers were first summarized via a `RESEARCH_AGENT.md` SKILL using Claude Opus 4.6, which 
@@ -28,6 +30,20 @@ in the RAG.
 - **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing double-indexing.
 - **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
 - **Persistent Storage**: Database stored in `./chroma_db_academic`.
+- **Observability**: Integrates **Langfuse v3+** and **OpenInference** for full-stack RAG observability.
+    - Captures query traces, spans, and metadata automatically.
+    - Tracks token usage, latency, and cost per query.
+    - Persistent local audit log in `query_log.jsonl`.
+
+### Scientific Persona & Formatting
+
+The system uses a **Senior Staff Data Scientist** persona as defined in the `SYSTEM_PROMPT` constant:
+- **BibTeX citations** included for all referenced papers.
+- **LaTeX** for all mathematical expressions.
+- **Python** preferred for code examples.
+- **Pure Markdown** output for direct file redirection/chaining.
+
+The persona is configurable. See `src/zettlr_rag/consts.py` for the `SYSTEM_PROMPT`.
 
 ## Usage
 
@@ -46,11 +62,21 @@ zettlr-rag-setup
 ### 2. Querying
 
 #### CLI Usage
-The `query.py` script is the primary entry point for terminal-based research.
+The `query.py` script is the primary entry point for terminal-based research. All queries are automatically logged to `query_log.jsonl` for persistent auditing.
 
 ```bash
 # Standard Query
 uv run query.py "What are the core components of GP models?"
+```
+
+#### Accessing Logs
+You can load your query history into a pandas DataFrame using the provided utility:
+
+```python
+from zettlr_rag.utils import load_query_log
+df = load_query_log("query_log.jsonl")
+print(df.head())
+```
 
 # Chaining to Markdown (Redirect stdout to file)
 uv run query.py "Summarize Gaussian Process requirements" >> research_notes.md
@@ -126,13 +152,6 @@ The system automatically maps your YAML header to searchable metadata.
 | `category` | `ExactMatch` | `==` | Narrow search to a top-level folder. |
 | `tags` | `InFilter` | `in` | Filter by methodology or sub-topic. |
 | `authors` | `InFilter` | `in` | Find research by a specific scientist. |
-
-## Scientific Persona & Formatting
-The system uses a **Senior Staff Data Scientist** persona:
-- **BibTeX citations** included for all referenced papers.
-- **LaTeX** for all mathematical expressions.
-- **Python** preferred for code examples.
-- **Pure Markdown** output for direct file redirection/chaining.
 
 ## Testing
 

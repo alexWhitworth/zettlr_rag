@@ -1,7 +1,14 @@
+# query.py
 import argparse
+import asyncio
 import json
+import logging
 import os
 import sys
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Optional
 
 import chromadb
 import nest_asyncio
@@ -13,25 +20,195 @@ from llama_index.core.vector_stores import (
 )
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from zettlr_rag.rag_setup import SYSTEM_PROMPT, setup_settings
+from zettlr_rag.consts import (
+    GEMINI_CONTEXT_WINDOWS,
+    GEMINI_PRICING,
+    MODEL_NAME,
+    SYSTEM_PROMPT,
+)
+from zettlr_rag.metrics import (
+    QueryMetrics,
+    TokenUsage,
+    calculate_cost,
+    calculate_window_utilization,
+)
+from zettlr_rag.rag_setup import get_last_token_usage, setup_settings
+from zettlr_rag.telemetry import (
+    get_langfuse_client,
+    init_telemetry,
+)
+
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.WARNING)
 
 
-def get_query_engine(filters=None):
-    """Connects to the persistent index and returns a query engine."""
-    setup_settings()
-    db = chromadb.PersistentClient(path="./chroma_db_academic")
-    chroma_collection = db.get_or_create_collection("research_papers")
-    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-    index = VectorStoreIndex.from_vector_store(vector_store)
+@dataclass(frozen=True)
+class RAGQueryConfig:
+    """Configuration for RAG query execution."""
+    similarity_top_k: int = 20
+    system_prompt: str = SYSTEM_PROMPT
+    instrumented: bool = False
+    run_id: Optional[str] = None
+    chroma_path: str = "./chroma_db_academic"
+    collection_name: str = "research_papers"
+    log_path: str = "query_log.jsonl"
 
-    return index.as_query_engine(similarity_top_k=20, filters=filters, system_prompt=SYSTEM_PROMPT)
+
+class RAGQueryRunner:
+    """Encapsulates the RAG query lifecycle: execution, metrics, and telemetry."""
+
+    def __init__(self, config: RAGQueryConfig, filters: Optional[MetadataFilters] = None):
+        self.config = config
+        self.filters = filters
+        self.engine = self._initialize_engine()
+        self.lf_client = get_langfuse_client() if config.instrumented else None
+
+    def _initialize_engine(self):
+        """Connects to the persistent index and returns a query engine."""
+        setup_settings()
+        db = chromadb.PersistentClient(path=self.config.chroma_path)
+        chroma_collection = db.get_or_create_collection(self.config.collection_name)
+        vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+        index = VectorStoreIndex.from_vector_store(vector_store)
+
+        return index.as_query_engine(
+            similarity_top_k=self.config.similarity_top_k,
+            filters=self.filters,
+            system_prompt=self.config.system_prompt,
+        )
+
+    def query(self, question: str) -> tuple[object, QueryMetrics]:
+        """Orchestrates the full query lifecycle."""
+        wall_start = time.monotonic()
+
+        if self.config.instrumented:
+            response = self._monitored_query(question)
+        else:
+            response = self.engine.query(question)
+
+        wall_time = time.monotonic() - wall_start
+
+        # ── Extract and compute metrics ───────────────────────────────────────
+        raw_usage = get_last_token_usage()
+        # Map to TokenUsage manually
+        input_tokens = raw_usage.get("prompt_token_count", 0)
+        output_tokens = raw_usage.get("candidates_token_count", 0)
+        cache_tokens = raw_usage.get("cached_content_token_count", 0)
+        total_tokens = raw_usage.get("total_token_count", 0)
+
+        cost_input, cost_output, cost_cache, cost_total = calculate_cost(
+            usage=TokenUsage(input_tokens, output_tokens, cache_tokens),
+            model_name=MODEL_NAME,
+            pricing_table=GEMINI_PRICING,
+        )
+        window_size, window_util_pct = calculate_window_utilization(
+            input_tokens=input_tokens,
+            model_name=MODEL_NAME,
+            window_table=GEMINI_CONTEXT_WINDOWS,
+        )
+
+        source_nodes = response.source_nodes or []
+        similarity_scores = [n.get_score() for n in source_nodes if n.get_score() is not None]
+
+        metrics = QueryMetrics(
+            question=question,
+            model_name=MODEL_NAME,
+            run_id=self.config.run_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_tokens=cache_tokens,
+            total_tokens=total_tokens,
+            cost_input_usd=cost_input,
+            cost_output_usd=cost_output,
+            cost_cache_usd=cost_cache,
+            cost_total_usd=cost_total,
+            context_window_size=window_size,
+            window_utilization_pct=window_util_pct,
+            wall_time_ms=round(wall_time * 1000, 2),
+            chunks_retrieved=len(source_nodes),
+            top_similarity=max(similarity_scores) if similarity_scores else 0.0,
+            mean_similarity=(
+                sum(similarity_scores) / len(similarity_scores)
+                if similarity_scores else 0.0
+            ),
+        )
+
+        # ── Persistent Local Storage ─────────────────────────────────────────
+        self._append_to_local_log(metrics, str(response))
+
+        # ── Post telemetry ───────────────────────────────────────────────────
+        if self.config.instrumented and self.lf_client:
+            try:
+                self._post_scores(metrics)
+            except Exception as exc:
+                log.warning(f"Failed to post scores to Langfuse: {exc}")
+
+        return response, metrics
+
+    def _monitored_query(self, question: str):
+        """Inner query call wrapped with Langfuse observation."""
+        from langfuse import observe
+
+        @observe(name="rag-query")
+        def _run_aquery():
+            # Attempt async query for potentially better metadata preservation
+            try:
+                return asyncio.run(self.engine.aquery(question))
+            except Exception:
+                return self.engine.query(question)
+
+        return _run_aquery()
+
+    def _post_scores(self, metrics: QueryMetrics):
+        """Post computed metrics as scores to the current Langfuse trace."""
+        from langfuse import observe
+        
+        @observe(name="post-metrics")
+        def _do_post():
+            trace_id = self.lf_client.get_current_trace_id()
+            if trace_id:
+                for name, value in metrics.to_langfuse_scores().items():
+                    self.lf_client.create_score(
+                        trace_id=trace_id,
+                        name=name,
+                        value=value,
+                        data_type="NUMERIC",
+                    )
+        _do_post()
+
+    def _append_to_local_log(self, metrics: QueryMetrics, answer: str) -> None:
+        """
+        Appends one result record to a local JSONL file.
+        Creates the file if it doesn't exist.
+        Each line is a complete, self-contained JSON record.
+        """
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "question": metrics.question,
+            "answer": answer,
+            "model_name": metrics.model_name,
+            "run_id": metrics.run_id,
+            "input_tokens": metrics.input_tokens,
+            "output_tokens": metrics.output_tokens,
+            "cache_tokens": metrics.cache_tokens,
+            "total_tokens": metrics.total_tokens,
+            "cost_input_usd": metrics.cost_input_usd,
+            "cost_output_usd": metrics.cost_output_usd,
+            "cost_cache_usd": metrics.cost_cache_usd,
+            "cost_total_usd": metrics.cost_total_usd,
+            "window_utilization_pct": metrics.window_utilization_pct,
+            "wall_time_ms": metrics.wall_time_ms,
+            "chunks_retrieved": metrics.chunks_retrieved,
+            "top_similarity": metrics.top_similarity,
+            "mean_similarity": metrics.mean_similarity,
+        }
+
+        with open(self.config.log_path, "a") as f:
+            f.write(json.dumps(record) + "\n")
 
 
 def parse_complex_filters(filter_data):
-    """
-    Recursively parses a dict into LlamaIndex MetadataFilters.
-    Supports 'and'/'or' keys with lists of conditions.
-    """
+    """Recursively parses a dict into LlamaIndex MetadataFilters."""
     if not isinstance(filter_data, dict):
         return filter_data
 
@@ -45,13 +222,13 @@ def parse_complex_filters(filter_data):
     filters = []
     for item in items:
         if isinstance(item, dict) and ("and" in item or "or" in item):
-            # Nested filters
             filters.append(parse_complex_filters(item))
         else:
-            # Single filter: {"key": "year", "value": 2024, "operator": "=="}
             filters.append(
                 MetadataFilter(
-                    key=item["key"], value=item["value"], operator=item.get("operator", "==")
+                    key=item["key"],
+                    value=item["value"],
+                    operator=item.get("operator", "=="),
                 )
             )
 
@@ -61,33 +238,46 @@ def parse_complex_filters(filter_data):
     )
 
 
+def print_metrics_stderr(metrics: QueryMetrics) -> None:
+    """Print a human-readable metrics summary to stderr."""
+    print("\n---", file=sys.stderr)
+    print("📊 Query Metrics:", file=sys.stderr)
+    print(f"  Wall time:             {metrics.wall_time_ms:.0f} ms", file=sys.stderr)
+    print(f"  Tokens (in/out/cache): {metrics.input_tokens} / {metrics.output_tokens} / {metrics.cache_tokens}", file=sys.stderr)
+    print(f"  Total tokens:          {metrics.total_tokens}", file=sys.stderr)
+    print(f"  Cost:                  ${metrics.cost_total_usd:.6f} USD", file=sys.stderr)
+    print(f"  Window utilization:    {metrics.window_utilization_pct:.2f}%", file=sys.stderr)
+    print(f"  Chunks retrieved:      {metrics.chunks_retrieved}", file=sys.stderr)
+    print(f"  Similarity (top/mean): {metrics.top_similarity:.3f} / {metrics.mean_similarity:.3f}", file=sys.stderr)
+
+
 def main():
     nest_asyncio.apply()
 
     parser = argparse.ArgumentParser(description="Query the Zettlr MD-RAG Library")
-    parser.add_argument("question", type=str, help="The question to ask.")
-    parser.add_argument("--year", type=int, help="Filter papers by year.")
-    parser.add_argument("--category", type=str, help="Filter by folder category.")
-    parser.add_argument("--tag", type=str, help="Filter by specific tag.")
-    parser.add_argument(
-        "--filter-json", type=str, help="Complex Boolean logic (JSON string or path to .json file)."
-    )
+    parser.add_argument("question",      type=str, help="The question to ask.")
+    parser.add_argument("--year",        type=int, help="Filter papers by year.")
+    parser.add_argument("--category",    type=str, help="Filter by folder category.")
+    parser.add_argument("--tag",         type=str, help="Filter by specific tag.")
+    parser.add_argument("--filter-json", type=str, help="Complex Boolean logic (JSON string or path to .json file).")
+    parser.add_argument("--run-id",      type=str, help="Optional run ID for reliability testing.", default=None)
+    parser.add_argument("--no-metrics",  action="store_true", help="Suppress metrics output to stderr.")
 
     args = parser.parse_args()
 
+    # ── Initialize Telemetry ─────────────────────────────────────────────────
+    instrumented = init_telemetry()
+
+    # ── Filter construction ───────────────────────────────────────────────────
     filters = None
     if args.filter_json:
-        # Check if it's a file path or raw JSON
         if os.path.exists(args.filter_json):
             with open(args.filter_json) as f:
                 filter_data = json.load(f)
         else:
             filter_data = json.loads(args.filter_json)
-
-        print("Applying complex filters", file=sys.stderr)
         filters = parse_complex_filters(filter_data)
     else:
-        # Simple AND logic from flags
         filter_list = []
         if args.year:
             filter_list.append(MetadataFilter(key="year", value=args.year))
@@ -95,19 +285,22 @@ def main():
             filter_list.append(MetadataFilter(key="category", value=args.category))
         if args.tag:
             filter_list.append(MetadataFilter(key="tags", value=args.tag))
-
         if filter_list:
-            print(f"Applying simple filters: {args.__dict__}", file=sys.stderr)
             filters = MetadataFilters(filters=filter_list, condition=FilterCondition.AND)
 
-    engine = get_query_engine(filters=filters)
-    response = engine.query(args.question)
+    # ── Execute query ──────────────────────────────────────────────────────────
+    config = RAGQueryConfig(instrumented=instrumented, run_id=args.run_id)
+    runner = RAGQueryRunner(config=config, filters=filters)
+    response, metrics = runner.query(args.question)
 
+    # ── Output ────────────────────────────────────────────────────────────────
     print(f"# Query: {args.question}\n")
     print(response)
 
-    print("\n---", file=sys.stderr)
-    print("📚 Sources used:", file=sys.stderr)
+    if not args.no_metrics:
+        print_metrics_stderr(metrics)
+
+    print("\n📚 Sources used:", file=sys.stderr)
     for node in response.source_nodes:
         m = node.metadata
         print(

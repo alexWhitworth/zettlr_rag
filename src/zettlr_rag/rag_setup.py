@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import threading
 from typing import Any, cast
 
 import chromadb
@@ -16,6 +17,7 @@ from llama_index.core import (
     VectorStoreIndex,
     load_index_from_storage,
 )
+from llama_index.core.base.llms.types import CompletionResponse, ChatResponse
 from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.schema import (
     MetadataMode,
@@ -26,36 +28,82 @@ from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
+from zettlr_rag.consts import EMBEDDING_MODEL_NAME, MODEL_NAME, SYSTEM_PROMPT
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "I am a Senior Staff Data Scientist, Algorithms. When I ask technical or research questions, "
-    "provide high-level scientific detail and include paper citations (bibtex format). "
-    "Use clean Markdown formatting with clear headers, bold text for key terms, "
-    "and LaTeX for math. Prefer Python for all code examples. Assume a high level of "
-    "statistical and algorithmic understanding. Provide sufficient detail to produce "
-    "complete answers, but prefer brevity to unnecessarily verbose responses. "
-    "Do not include conversational filler—start directly with the content."
-)
+
+# Thread-local storage so usage is safe across concurrent calls
+_usage_store = threading.local()
+
+
+def get_last_token_usage() -> dict:
+    """
+    Call this immediately after engine.query() to get token counts
+    from the most recent Gemini API response.
+    Returns zeros if no usage was captured.
+    """
+    return getattr(_usage_store, "last_usage", {
+        "prompt_token_count":            0,
+        "candidates_token_count":        0,
+        "cached_content_token_count":    0,
+        "total_token_count":             0,
+    })
+
+
+class TokenCapturingGemini(GoogleGenAI):
+    """
+    Thin wrapper around GoogleGenAI that intercepts raw responses
+    and captures usage_metadata before LlamaIndex discards it.
+    """
+
+    def complete(self, prompt: str, **kwargs: Any) -> CompletionResponse:
+        response = super().complete(prompt, **kwargs)
+        self._capture_usage(response)
+        return response
+
+    def chat(self, messages: Any, **kwargs: Any) -> ChatResponse:
+        response = super().chat(messages, **kwargs)
+        self._capture_usage(response)
+        return response
+
+    def _capture_usage(self, response: Any) -> None:
+        """Extract usage_metadata from the raw Gemini response object."""
+        try:
+            # The raw Google SDK response is accessible via response.raw
+            raw = getattr(response, "raw", None)
+            if raw and hasattr(raw, "usage_metadata"):
+                meta = raw.usage_metadata
+                _usage_store.last_usage = {
+                    "prompt_token_count":         getattr(meta, "prompt_token_count",          0),
+                    "candidates_token_count":     getattr(meta, "candidates_token_count",      0),
+                    "cached_content_token_count": getattr(meta, "cached_content_token_count",  0),
+                    "total_token_count":          getattr(meta, "total_token_count",           0),
+                }
+                return
+
+            # Fallback: check additional_kwargs
+            additional = getattr(response, "additional_kwargs", {})
+            if "usage_metadata" in additional:
+                _usage_store.last_usage = additional["usage_metadata"]
+                return
+
+        except Exception:
+            pass  # Silent — fall through to zeros
 
 
 def sanitize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     """
     Flatten metadata for ChromaDB compatibility.
     ChromaDB only accepts str, int, float, or None as metadata values.
-
-    - Lists are joined into comma-separated strings (e.g. authors, tags).
-    - Dicts are JSON-serialized to strings.
-    - Anything else non-scalar is cast to str.
     """
     sanitized: dict[str, Any] = {}
     for key, value in metadata.items():
         if isinstance(value, (str, int, float)) or value is None:
             sanitized[key] = value
         elif isinstance(value, list):
-            # Join list of strings; convert non-strings to str first
             sanitized[key] = ", ".join(str(v) for v in value)
         elif isinstance(value, dict):
             import json
@@ -75,13 +123,13 @@ def setup_settings() -> None:
     if not os.getenv("GOOGLE_API_KEY"):
         os.environ["GOOGLE_API_KEY"] = cast(str, os.getenv("GEMINI_API_KEY"))
 
-    Settings.llm = GoogleGenAI(
-        model="models/gemini-3-flash-preview", api_key=cast(str, os.getenv("GEMINI_API_KEY"))
+    Settings.llm = TokenCapturingGemini(
+        model=f"models/{MODEL_NAME}", api_key=cast(str, os.getenv("GEMINI_API_KEY"))
     )
 
     # Use the stock GoogleGenAIEmbedding — its built-in retry handles 429s
     embed_model = GoogleGenAIEmbedding(
-        model_name="models/gemini-embedding-2-preview",
+        model_name=f"models/{EMBEDDING_MODEL_NAME}",
         api_key=cast(str, os.getenv("GEMINI_API_KEY")),
         embed_batch_size=10,
         retry_min_seconds=10,

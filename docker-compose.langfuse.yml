@@ -1,0 +1,36 @@
+# docker-compose.langfuse.yml
+version: "3.8"
+
+services:
+  langfuse-db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  langfuse:
+    image: langfuse/langfuse:latest
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      NEXTAUTH_SECRET: "local-dev-secret-change-in-prod"
+      NEXTAUTH_URL: "http://localhost:3000"
+      SALT: "local-dev-salt-change-in-prod"
+      TELEMETRY_ENABLED: "false"    # Disable Langfuse's own usage telemetry
+
+volumes:
+  langfuse_postgres:
