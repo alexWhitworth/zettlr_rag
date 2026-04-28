@@ -32,7 +32,8 @@ in the RAG.
 - **Persistent Storage**: Database stored in `./chroma_db_academic`.
 - **Observability**: Integrates **Langfuse v3+** and **OpenInference** for full-stack RAG observability.
     - Captures query traces, spans, and metadata automatically.
-    - Tracks token usage, latency, and cost per query.
+    - Tracks token usage, latency, and cost per query using custom `TokenCapturingGemini` wrapper.
+        - Needed due to [llama_index bug](https://github.com/run-llama/llama_index/issues/19293)
     - Persistent local audit log in `query_log.jsonl`.
 
 ### Scientific Persona & Formatting

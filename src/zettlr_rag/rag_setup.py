@@ -35,63 +35,72 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# Thread-local storage so usage is safe across concurrent calls
+import threading
+from llama_index.llms.google_genai import GoogleGenAI
+from zettlr_rag.metrics import TokenUsage
+
 _usage_store = threading.local()
 
-
-def get_last_token_usage() -> dict:
-    """
-    Call this immediately after engine.query() to get token counts
-    from the most recent Gemini API response.
-    Returns zeros if no usage was captured.
-    """
-    return getattr(_usage_store, "last_usage", {
-        "prompt_token_count":            0,
-        "candidates_token_count":        0,
-        "cached_content_token_count":    0,
-        "total_token_count":             0,
-    })
+def get_last_token_usage() -> TokenUsage:
+    """Returns token usage captured from the most recent Gemini call."""
+    return getattr(_usage_store, "last_usage", TokenUsage())
 
 
 class TokenCapturingGemini(GoogleGenAI):
     """
-    Thin wrapper around GoogleGenAI that intercepts raw responses
-    and captures usage_metadata before LlamaIndex discards it.
+    Wraps GoogleGenAI and captures usage_metadata before
+    LlamaIndex's query engine pipeline discards it.
     """
 
-    def complete(self, prompt: str, **kwargs: Any) -> CompletionResponse:
+    def complete(self, prompt, **kwargs):
         response = super().complete(prompt, **kwargs)
-        self._capture_usage(response)
+        self._store(response)
         return response
 
-    def chat(self, messages: Any, **kwargs: Any) -> ChatResponse:
+    def chat(self, messages, **kwargs):
         response = super().chat(messages, **kwargs)
-        self._capture_usage(response)
+        self._store(response)
         return response
 
-    def _capture_usage(self, response: Any) -> None:
-        """Extract usage_metadata from the raw Gemini response object."""
+    async def acomplete(self, prompt, **kwargs):
+        response = await super().acomplete(prompt, **kwargs)
+        self._store(response)
+        return response
+
+    async def achat(self, messages, **kwargs):
+        response = await super().achat(messages, **kwargs)
+        self._store(response)
+        return response
+
+    def _store(self, response) -> None:
         try:
-            # The raw Google SDK response is accessible via response.raw
+            # Try raw attribute first
             raw = getattr(response, "raw", None)
-            if raw and hasattr(raw, "usage_metadata"):
-                meta = raw.usage_metadata
-                _usage_store.last_usage = {
-                    "prompt_token_count":         getattr(meta, "prompt_token_count",          0),
-                    "candidates_token_count":     getattr(meta, "candidates_token_count",      0),
-                    "cached_content_token_count": getattr(meta, "cached_content_token_count",  0),
-                    "total_token_count":          getattr(meta, "total_token_count",           0),
-                }
-                return
+            if raw:
+                meta = getattr(raw, "usage_metadata", None)
+                if meta:
+                    _usage_store.last_usage = TokenUsage(
+                        input_tokens=getattr(meta, "prompt_token_count",         0) or 0,
+                        output_tokens=getattr(meta, "candidates_token_count",    0) or 0,
+                        cache_tokens=getattr(meta, "cached_content_token_count", 0) or 0,
+                    )
+                    return
 
-            # Fallback: check additional_kwargs
-            additional = getattr(response, "additional_kwargs", {})
-            if "usage_metadata" in additional:
-                _usage_store.last_usage = additional["usage_metadata"]
-                return
-
+            # Try additional_kwargs
+            extra = getattr(response, "additional_kwargs", {}) or {}
+            
+            # Map based on observed keys: 'prompt_tokens', 'completion_tokens', 'total_tokens'
+            input_tokens = extra.get("prompt_tokens", 0)
+            output_tokens = extra.get("completion_tokens", 0)
+            
+            if input_tokens or output_tokens:
+                _usage_store.last_usage = TokenUsage(
+                    input_tokens=input_tokens or 0,
+                    output_tokens=output_tokens or 0,
+                    cache_tokens=0, # Not clearly provided in additional_kwargs here
+                )
         except Exception:
-            pass  # Silent — fall through to zeros
+            pass  # Falls through to zeros — not fatal
 
 
 def sanitize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -123,6 +132,7 @@ def setup_settings() -> None:
     if not os.getenv("GOOGLE_API_KEY"):
         os.environ["GOOGLE_API_KEY"] = cast(str, os.getenv("GEMINI_API_KEY"))
 
+    # Use wrapper instead of GoogleGenAI directly
     Settings.llm = TokenCapturingGemini(
         model=f"models/{MODEL_NAME}", api_key=cast(str, os.getenv("GEMINI_API_KEY"))
     )

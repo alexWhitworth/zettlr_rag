@@ -89,15 +89,14 @@ class RAGQueryRunner:
         wall_time = time.monotonic() - wall_start
 
         # ── Extract and compute metrics ───────────────────────────────────────
-        raw_usage = get_last_token_usage()
-        # Map to TokenUsage manually
-        input_tokens = raw_usage.get("prompt_token_count", 0)
-        output_tokens = raw_usage.get("candidates_token_count", 0)
-        cache_tokens = raw_usage.get("cached_content_token_count", 0)
-        total_tokens = raw_usage.get("total_token_count", 0)
+        usage = get_last_token_usage()
+        input_tokens = usage.input_tokens
+        output_tokens = usage.output_tokens
+        cache_tokens = usage.cache_tokens
+        total_tokens = usage.total_tokens
 
         cost_input, cost_output, cost_cache, cost_total = calculate_cost(
-            usage=TokenUsage(input_tokens, output_tokens, cache_tokens),
+            usage=usage,
             model_name=MODEL_NAME,
             pricing_table=GEMINI_PRICING,
         )
