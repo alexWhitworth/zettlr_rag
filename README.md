@@ -68,16 +68,6 @@ The `query.py` script is the primary entry point for terminal-based research. Al
 ```bash
 # Standard Query
 uv run query.py "What are the core components of GP models?"
-```
-
-#### Accessing Logs
-You can load your query history into a pandas DataFrame using the provided utility:
-
-```python
-from zettlr_rag.utils import load_query_log
-df = load_query_log("query_log.jsonl")
-print(df.head())
-```
 
 # Chaining to Markdown (Redirect stdout to file)
 uv run query.py "Summarize Gaussian Process requirements" >> research_notes.md
@@ -97,6 +87,15 @@ uv run query.py "Complex search" --filter-json '{
 
 # Using a filter file
 uv run query.py "Research from 2020-2022" --filter-json filters.json
+```
+
+#### Accessing Logs
+You can load your query history into a pandas DataFrame using the provided utility:
+
+```python
+from zettlr_rag.utils import load_query_log
+df = load_query_log("query_log.jsonl")
+print(df.head())
 ```
 
 #### JSON Filter Syntax (ExactMatch, Range, InFilter)
