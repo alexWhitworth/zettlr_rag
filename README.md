@@ -24,9 +24,8 @@ in the RAG.
 The system utilizes a multi-stage hybrid retrieval pipeline to ensure high precision and diversity in the context provided to the LLM:
 
 1.  **Hybrid Retrieval**: Combines semantic search (**Vector**) with keyword-based search (**BM25**).
-2.  **Fusion**: Uses **Reciprocal Rank Fusion (RRF)** with `relative_score` mode to merge and normalize results from different retrieval methods.
+2.  **Fusion**: Uses **Reciprocal Rank Fusion (RRF)** with `reciprocal_rerank` mode to merge and normalize results from different retrieval methods.
 3.  **Refinement Pipeline**:
-    *   **Similarity Cutoff**: Prunes nodes with low relevance scores (threshold: 0.5).
     *   **MMR (Maximum Marginal Relevance)**: Reranks for diversity to avoid redundant information in the context window.
     *   **LLM Reranking**: Uses the LLM to perform a final precision-based reranking of the top nodes.
     *   **Long Context Reordering**: Reorders nodes to combat the "lost in the middle" effect, placing most relevant information at the start and end of the prompt.
