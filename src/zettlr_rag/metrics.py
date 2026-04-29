@@ -1,13 +1,13 @@
-# src/zettlr_rag/metrics.py
 """
 Pure calculation functions for cost and utilization metrics.
 No external dependencies — fully unit testable.
 """
 
-from dataclasses import dataclass, field
-from typing import Optional
-import time
-import sys
+from dataclasses import dataclass
+
+import numpy as np
+from scipy.stats import entropy
+from sklearn.cluster import AgglomerativeClustering
 
 
 @dataclass
@@ -28,7 +28,7 @@ class QueryMetrics:
     # ── Identity ──────────────────────────────────────────────────────────────
     question:           str = ""
     model_name:         str = ""
-    run_id:             Optional[str] = None
+    run_id:             str | None = None
 
     # ── Token counts ──────────────────────────────────────────────────────────
     input_tokens:       int = 0
@@ -51,7 +51,7 @@ class QueryMetrics:
     llm_latency_ms:     float = 0.0        # Gemini API round-trip
     embedding_latency_ms: float = 0.0
     retrieval_latency_ms: float = 0.0
-    ttft_ms:            Optional[float] = None   # None if not streaming
+    ttft_ms:            float | None = None   # None if not streaming
 
     # ── Retrieval quality ─────────────────────────────────────────────────────
     chunks_retrieved:   int   = 0
@@ -130,10 +130,6 @@ def calculate_window_utilization(
 def extract_token_usage_from_response(response) -> TokenUsage:
     """
     Extract token counts from a LlamaIndex query response backed by Gemini.
-
-    Gemini returns usage_metadata in the raw response. LlamaIndex surfaces
-    this in response.metadata under different keys depending on version.
-    This function tries multiple known paths defensively.
     """
     usage = TokenUsage()
 
@@ -143,10 +139,9 @@ def extract_token_usage_from_response(response) -> TokenUsage:
     meta = response.metadata
 
     # ── Path 1: Gemini usage_metadata (most common in recent LlamaIndex) ──────
-    usage_meta = meta.get("usage_metadata", {})
-    usage.input_tokens  = meta.get("prompt_token_count",            usage.input_tokens)
-    usage.output_tokens = meta.get("candidates_token_count",        usage.output_tokens)
-    usage.cache_tokens  = meta.get("cached_content_token_count",    usage.cache_tokens)
+    usage.input_tokens  = meta.get("prompt_token_count", usage.input_tokens)
+    usage.output_tokens = meta.get("candidates_token_count", usage.output_tokens)
+    usage.cache_tokens  = meta.get("cached_content_token_count", usage.cache_tokens)
     if usage.total_tokens > 0:
         return usage
 
@@ -164,10 +159,54 @@ def extract_token_usage_from_response(response) -> TokenUsage:
             if hasattr(node, "metadata") and node.metadata:
                 node_usage = node.metadata.get("usage_metadata", {})
                 if node_usage:
-                    usage.input_tokens = node_usage.get("prompt_token_count", usage.input_tokens)
-                    usage.output_tokens = node_usage.get("candidates_token_count", usage.output_tokens)
-                    usage.cache_tokens = node_usage.get("cached_content_token_count", usage.cache_tokens)
+                    usage.input_tokens = node_usage.get(
+                        "prompt_token_count", usage.input_tokens
+                    )
+                    usage.output_tokens = node_usage.get(
+                        "candidates_token_count", usage.output_tokens
+                    )
+                    usage.cache_tokens = node_usage.get(
+                        "cached_content_token_count", usage.cache_tokens
+                    )
                     if usage.total_tokens > 0:
                         return usage
 
     return usage
+
+
+def compute_spherical_mean_resultant_length(embeddings: np.ndarray) -> float:
+    """Compute Spherical Mean Resultant Length (R) of embeddings."""
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    # Avoid division by zero
+    norms[norms == 0] = 1.0
+    unit_vectors = embeddings / norms
+    return float(np.linalg.norm(np.mean(unit_vectors, axis=0)))
+
+
+def compute_centroid_dispersion(embeddings: np.ndarray) -> float:
+    """Compute Centroid Dispersion (CD) of embeddings."""
+    if len(embeddings) <= 1:
+        return 0.0
+    centroid = np.mean(embeddings, axis=0)
+    distances = np.linalg.norm(embeddings - centroid, axis=1)
+    return float(np.mean(distances))
+
+
+def compute_semantic_entropy(embeddings: np.ndarray) -> float:
+    """Compute Semantic Entropy (H_sem) using agglomerative clustering."""
+    if len(embeddings) <= 1:
+        return 0.0
+
+    # Distance threshold 0.1 corresponds to cosine similarity >= 0.9
+    # (1 - similarity) = distance
+    model = AgglomerativeClustering(
+        n_clusters=None,
+        metric="cosine",
+        linkage="average",
+        distance_threshold=0.1
+    )
+    labels = model.fit_predict(embeddings)
+
+    _, counts = np.unique(labels, return_counts=True)
+    probs = counts / len(embeddings)
+    return float(entropy(probs, base=2))
