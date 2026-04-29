@@ -35,3 +35,25 @@ def test_semantic_entropy():
     # Distinct should have non-zero entropy
     vecs = np.array([[1.0, 0.0], [0.0, 1.0]])
     assert compute_semantic_entropy(vecs) > 0.0
+
+def test_query_metrics_to_langfuse_scores():
+    from zettlr_rag.metrics import QueryMetrics
+    
+    metrics = QueryMetrics(
+        cost_total_usd=0.001234567,
+        input_tokens=100,
+        output_tokens=50,
+        top_similarity=0.95,
+        mean_similarity=0.8,
+        p10_similarity=0.6,
+        p90_similarity=0.9
+    )
+    
+    scores = metrics.to_langfuse_scores()
+    
+    assert scores["cost_total_usd"] == 0.00123457
+    assert scores["tokens_input"] == 100.0
+    assert scores["top_similarity"] == 0.95
+    assert scores["p10_similarity"] == 0.6
+    assert scores["p90_similarity"] == 0.9
+

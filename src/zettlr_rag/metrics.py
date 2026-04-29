@@ -57,6 +57,8 @@ class QueryMetrics:
     chunks_retrieved:   int   = 0
     top_similarity:     float = 0.0
     mean_similarity:    float = 0.0
+    p10_similarity:     float = 0.0
+    p90_similarity:     float = 0.0
 
     # ── Scores dict for Langfuse bulk posting ─────────────────────────────────
     def to_langfuse_scores(self) -> dict[str, float]:
@@ -79,6 +81,8 @@ class QueryMetrics:
             "chunks_retrieved":        float(self.chunks_retrieved),
             "top_similarity":          round(self.top_similarity, 4),
             "mean_similarity":         round(self.mean_similarity, 4),
+            "p10_similarity":          round(self.p10_similarity, 4),
+            "p90_similarity":          round(self.p90_similarity, 4),
         }
         if self.ttft_ms is not None:
             scores["ttft_ms"] = round(self.ttft_ms, 2)

@@ -1,6 +1,6 @@
 [project]
 name = "zettlr-rag"
-version = "0.4.2"
+version = "0.5.0"
 description = "RAG for my academic papers library"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -8,6 +8,8 @@ dependencies = [
     "llama-index-llms-google-genai",
     "llama-index-embeddings-google-genai",
     "llama-index-vector-stores-chroma",
+    "llama-index-retrievers-bm25",
+    "rank-bm25",
     "chromadb",
     "python-frontmatter",
     "python-dotenv",

@@ -37,7 +37,9 @@ def test_append_to_local_log(tmp_path):
         wall_time_ms=500.0,
         chunks_retrieved=5,
         top_similarity=0.9,
-        mean_similarity=0.8
+        mean_similarity=0.8,
+        p10_similarity=0.7,
+        p90_similarity=0.85
     )
     answer = "Shrinkage is a statistical technique."
     
@@ -58,6 +60,8 @@ def test_append_to_local_log(tmp_path):
         assert record["total_tokens"] == metrics.total_tokens
         assert record["cost_total_usd"] == metrics.cost_total_usd
         assert record["wall_time_ms"] == metrics.wall_time_ms
+        assert record["p10_similarity"] == metrics.p10_similarity
+        assert record["p90_similarity"] == metrics.p90_similarity
         assert "timestamp" in record
 
 def test_append_to_local_log_multiple_entries(tmp_path):
