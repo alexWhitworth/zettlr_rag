@@ -378,7 +378,11 @@ class AcademicRAGSync:
             print(f"\n📦 Batch {batch_num}/{total_batches} ({len(batch_docs)} docs)...")
 
             nodes = parser.get_nodes_from_documents(batch_docs)
-            nodes = [n for n in nodes if len(n.get_content().strip()) >= 20]
+            nodes = [
+                n for n in nodes 
+                if len(n.get_content().strip()) >= 20
+                and '```bibtex' not in n.get_content()  # Filter short nodes and raw BibTeX blocks
+            ]
 
             if not nodes:
                 continue

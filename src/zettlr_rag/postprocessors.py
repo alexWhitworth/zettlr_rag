@@ -8,27 +8,6 @@ from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import NodeWithScore, QueryBundle
 
 
-class BibtexExclusionPostprocessor(BaseNodePostprocessor):
-    """
-    Postprocessor to exclude nodes containing BibTeX entries.
-    Identified by the header '### 7. BibTeX'.
-    """
-
-    @classmethod
-    def class_name(cls) -> str:
-        return "BibtexExclusionPostprocessor"
-
-    def _postprocess_nodes(
-        self,
-        nodes: list[NodeWithScore],
-        query_bundle: QueryBundle | None = None,
-    ) -> list[NodeWithScore]:
-        return [
-            node for node in nodes
-            if "### 7. BibTeX" not in node.node.get_content()
-        ]
-
-
 class MMRPostprocessor(BaseNodePostprocessor):
     """
     Maximum Marginal Relevance (MMR) postprocessor.

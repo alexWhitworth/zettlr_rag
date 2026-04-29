@@ -1,20 +1,6 @@
 from llama_index.core.schema import NodeWithScore, TextNode
 
-from zettlr_rag.postprocessors import BibtexExclusionPostprocessor, MMRPostprocessor
-
-
-def test_bibtex_exclusion():
-    postprocessor = BibtexExclusionPostprocessor()
-    nodes = [
-        NodeWithScore(node=TextNode(text="Normal content")),
-        NodeWithScore(node=TextNode(text="Some ### 7. BibTeX content here")),
-        NodeWithScore(node=TextNode(text="Other text")),
-    ]
-
-    filtered_nodes = postprocessor.postprocess_nodes(nodes)
-    assert len(filtered_nodes) == 2
-    assert "### 7. BibTeX" not in filtered_nodes[0].node.get_content()
-    assert "### 7. BibTeX" not in filtered_nodes[1].node.get_content()
+from zettlr_rag.postprocessors import MMRPostprocessor
 
 
 def test_mmr_postprocessor_diversity():

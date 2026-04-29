@@ -40,7 +40,6 @@ from zettlr_rag.metrics import (
     calculate_window_utilization,
 )
 from zettlr_rag.postprocessors import (
-    BibtexExclusionPostprocessor,
     MMRPostprocessor,
 )
 from zettlr_rag.rag_setup import get_last_token_usage, setup_settings
@@ -108,14 +107,12 @@ class RAGQueryRunner:
             [vector_retriever, bm25_retriever],
             similarity_top_k=self.config.similarity_top_k,
             num_queries=1,  # No query generation
-            mode="relative_score",
+            mode="reciprocal_rerank",
             use_async=False,
         )
 
         # 3. Post-processing Pipeline
         node_postprocessors = [
-            BibtexExclusionPostprocessor(),
-            SimilarityPostprocessor(similarity_cutoff=0.5),
             MMRPostprocessor(mmr_threshold=0.6, top_n=12),
             LLMRerank(top_n=8),
             LongContextReorder(),
