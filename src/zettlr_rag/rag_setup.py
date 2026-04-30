@@ -156,7 +156,7 @@ def setup_settings() -> None:
         api_key=cast(str, os.getenv("GEMINI_API_KEY")),
         embed_batch_size=10,
         retry_min_seconds=10,
-        retries=10,
+        retries=15,
     )
 
     Settings.embed_model = embed_model

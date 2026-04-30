@@ -172,6 +172,7 @@ class RAGQueryRunner:
 
         source_nodes = response.source_nodes or []
         similarity_scores = [n.get_score() for n in source_nodes if n.get_score() is not None]
+        unique_docs = len(set(n.node.metadata.get("file_name") for n in source_nodes if "file_name" in n.node.metadata))
 
         metrics = QueryMetrics(
             question=question,
@@ -189,6 +190,7 @@ class RAGQueryRunner:
             window_utilization_pct=window_util_pct,
             wall_time_ms=round(wall_time * 1000, 2),
             chunks_retrieved=len(source_nodes),
+            docs_retrieved=unique_docs,
             top_similarity=max(similarity_scores) if similarity_scores else 0.0,
             mean_similarity=(
                 sum(similarity_scores) / len(similarity_scores)
@@ -264,6 +266,7 @@ class RAGQueryRunner:
             "window_utilization_pct": metrics.window_utilization_pct,
             "wall_time_ms": metrics.wall_time_ms,
             "chunks_retrieved": metrics.chunks_retrieved,
+            "docs_retrieved": metrics.docs_retrieved,
             "top_similarity": metrics.top_similarity,
             "mean_similarity": metrics.mean_similarity,
             "p10_similarity": metrics.p10_similarity,
@@ -315,6 +318,7 @@ def print_metrics_stderr(metrics: QueryMetrics) -> None:
     print(f"  Cost:                  ${metrics.cost_total_usd:.6f} USD", file=sys.stderr)
     print(f"  Window utilization:    {metrics.window_utilization_pct:.2f}%", file=sys.stderr)
     print(f"  Chunks retrieved:      {metrics.chunks_retrieved}", file=sys.stderr)
+    print(f"  Documents retrieved:   {metrics.docs_retrieved}", file=sys.stderr)
     print(f"  Similarity (top/mean): {metrics.top_similarity:.3f} / {metrics.mean_similarity:.3f}", file=sys.stderr)
     print(f"  Similarity (p10/p90):  {metrics.p10_similarity:.3f} / {metrics.p90_similarity:.3f}", file=sys.stderr)
 

@@ -1,5 +1,12 @@
 import argparse
 import nest_asyncio
+import os
+import sys
+import time
+
+# Add the project root to sys.path to import query.py
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from query import RAGQueryRunner, RAGQueryConfig
 
 # argparse
@@ -20,6 +27,7 @@ def run_batch(questions):
         # RAGQueryRunner.query automatically handles local logging to query_log.jsonl
         response, metrics = runner.query(q)
         print(f"Done. Cost: ${metrics.cost_total_usd:.4f}")
+        time.sleep(2)
 
 
 if __name__ == "__main__":

@@ -55,6 +55,7 @@ class QueryMetrics:
 
     # ── Retrieval quality ─────────────────────────────────────────────────────
     chunks_retrieved:   int   = 0
+    docs_retrieved:     int   = 0
     top_similarity:     float = 0.0
     mean_similarity:    float = 0.0
     p10_similarity:     float = 0.0
@@ -79,6 +80,7 @@ class QueryMetrics:
             "wall_time_ms":            round(self.wall_time_ms, 2),
             "llm_latency_ms":          round(self.llm_latency_ms, 2),
             "chunks_retrieved":        float(self.chunks_retrieved),
+            "docs_retrieved":          float(self.docs_retrieved),
             "top_similarity":          round(self.top_similarity, 4),
             "mean_similarity":         round(self.mean_similarity, 4),
             "p10_similarity":          round(self.p10_similarity, 4),
