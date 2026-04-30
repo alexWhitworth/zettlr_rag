@@ -8,7 +8,7 @@ import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from query import RAGQueryRunner, RAGQueryConfig
-from utils import load_query_log
+from zettlr_rag.utils import load_query_log
 
 # argparse
 parser = argparse.ArgumentParser(description="Run a batch of RAG queries from a file.")
@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
         PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        log_df = load_query_log(f("{PROJECT_ROOT}/query_log.jsonl"))
+        log_df = load_query_log(f"{PROJECT_ROOT}/query_log.jsonl")
         completed_questions = set(log_df["question"].unique())
 
         # Filter out already completed questions
