@@ -3,11 +3,13 @@ import nest_asyncio
 import os
 import sys
 import time
+import pandas as pd
 
 # Add the project root to sys.path to import query.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from query import RAGQueryRunner, RAGQueryConfig
+from utils import load_query_log
 
 # argparse
 parser = argparse.ArgumentParser(description="Run a batch of RAG queries from a file.")
@@ -36,4 +38,12 @@ if __name__ == "__main__":
             line.strip() for line in f 
             if line.strip() and not line.strip().startswith("#")  # Skip empty lines and comments
         ]
-        run_batch(queries)
+
+        PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))
+
+        log_df = load_query_log(f("{PROJECT_ROOT}/query_log.jsonl"))
+        completed_questions = set(log_df["question"].unique())
+
+        # Filter out already completed questions
+        questions_to_run = [q for q in queries if q not in completed_questions]
+        run_batch(questions_to_run)
