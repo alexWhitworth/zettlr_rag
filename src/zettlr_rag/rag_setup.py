@@ -41,15 +41,26 @@ from zettlr_rag.metrics import TokenUsage
 
 _usage_store = threading.local()
 
+def reset_token_usage() -> None:
+    """Resets the accumulated token usage for the current thread."""
+    _usage_store.last_usage = TokenUsage()
+
+
 def get_last_token_usage() -> TokenUsage:
-    """Returns token usage captured from the most recent Gemini call."""
+    """Returns token usage captured from the most recent Gemini calls."""
     return getattr(_usage_store, "last_usage", TokenUsage())
 
 
 class TokenCapturingGemini(GoogleGenAI):
     """
-    Wraps GoogleGenAI and captures usage_metadata before
-    LlamaIndex's query engine pipeline discards it.
+    Wraps GoogleGenAI to capture and accumulate usage_metadata.
+
+    This custom wrapper is required due to a bug in llama_index 
+    (https://github.com/run-llama/llama_index/issues/19293) where token usage metadata is 
+    discarded during the query engine pipeline. 
+    
+    This class intercepts the response and accumulates tokens across multiple calls (e.g., 
+    LLMRerank + Synthesis) into thread-local storage before llama_index drops the data.
     """
 
     def complete(self, prompt, **kwargs):
@@ -74,16 +85,20 @@ class TokenCapturingGemini(GoogleGenAI):
 
     def _store(self, response) -> None:
         try:
+            # Initialize if not exists
+            if not hasattr(_usage_store, "last_usage"):
+                _usage_store.last_usage = TokenUsage()
+                
+            current_usage = _usage_store.last_usage
+
             # Try raw attribute first
             raw = getattr(response, "raw", None)
             if raw:
                 meta = getattr(raw, "usage_metadata", None)
                 if meta:
-                    _usage_store.last_usage = TokenUsage(
-                        input_tokens=getattr(meta, "prompt_token_count",         0) or 0,
-                        output_tokens=getattr(meta, "candidates_token_count",    0) or 0,
-                        cache_tokens=getattr(meta, "cached_content_token_count", 0) or 0,
-                    )
+                    current_usage.input_tokens += getattr(meta, "prompt_token_count", 0) or 0
+                    current_usage.output_tokens += getattr(meta, "candidates_token_count", 0) or 0
+                    current_usage.cache_tokens += getattr(meta, "cached_content_token_count", 0) or 0
                     return
 
             # Try additional_kwargs
@@ -94,13 +109,11 @@ class TokenCapturingGemini(GoogleGenAI):
             output_tokens = extra.get("completion_tokens", 0)
             
             if input_tokens or output_tokens:
-                _usage_store.last_usage = TokenUsage(
-                    input_tokens=input_tokens or 0,
-                    output_tokens=output_tokens or 0,
-                    cache_tokens=0, # Not clearly provided in additional_kwargs here
-                )
+                current_usage.input_tokens += input_tokens or 0
+                current_usage.output_tokens += output_tokens or 0
+                
         except Exception:
-            pass  # Falls through to zeros — not fatal
+            pass  # Falls through — not fatal
 
 
 def sanitize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -194,7 +207,27 @@ def load_academic_markdown(directory: str) -> list[Document]:
 
 
 class AcademicRAGSync:
-    """Manages the synchronization of local academic markdown files with a Vector Index."""
+    """
+    Manages the synchronization of local academic markdown files with a Vector Index.
+
+    This class provides "Smart Sync" logic to efficiently maintain a ChromaDB 
+    vector store alongside a LlamaIndex document store. By analyzing file hashes 
+    and existing index metadata, it identifies new, modified, moved, or deleted 
+    files on disk. This prevents redundant embedding API calls and ensures that 
+    the vector store accurately reflects the current state of the markdown library.
+
+    The synchronization pipeline handles embedding extraction, batching, metadata 
+    sanitization, and persistent storage of the updated index state.
+
+    Methods:
+        initialize: Sets up the vector store, storage context, and index.
+        plan_sync: Compares disk files against the index to categorize needed changes.
+        execute_moves: Updates metadata and relationships for files that were relocated.
+        execute_deletions: Removes stale documents from both the docstore and vector store.
+        index_documents: Batches, embeds, and indexes new or modified documents.
+        run_sync: Orchestrates the complete plan, execute, and verify synchronization cycle.
+        verify: Runs a sample test query against the updated index.
+    """
 
     def __init__(
         self,

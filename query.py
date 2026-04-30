@@ -42,7 +42,7 @@ from zettlr_rag.metrics import (
 from zettlr_rag.postprocessors import (
     MMRPostprocessor,
 )
-from zettlr_rag.rag_setup import get_last_token_usage, setup_settings
+from zettlr_rag.rag_setup import get_last_token_usage, reset_token_usage, setup_settings
 from zettlr_rag.telemetry import (
     get_langfuse_client,
     init_telemetry,
@@ -66,7 +66,23 @@ class RAGQueryConfig:
 
 
 class RAGQueryRunner:
-    """Encapsulates the RAG query lifecycle: execution, metrics, and telemetry."""
+    """
+    Encapsulates the RAG query lifecycle: execution, metrics, and telemetry.
+
+    This class coordinates the multi-stage hybrid retrieval pipeline, including
+    vector and BM25 search, Reciprocal Rank Fusion (RRF), and post-processing steps 
+    like MMR diversity filtering and LLM-based reranking. It is designed to provide 
+    high-precision answers from academic markdown libraries while strictly tracking 
+    performance and financial costs.
+
+    The runner integrates thread-local token capturing to ensure that the token usage 
+    from all pipeline stages—including expensive reranking steps—is accurately 
+    summed and logged. It also supports metadata-based filtering and Langfuse 
+    instrumentation for deep observability.
+
+    Methods:
+        query: Orchestrates the full query lifecycle from retrieval to metric logging.
+    """
 
     def __init__(self, config: RAGQueryConfig, filters: MetadataFilters | None = None):
         self.config = config
@@ -126,6 +142,7 @@ class RAGQueryRunner:
 
     def query(self, question: str) -> tuple[object, QueryMetrics]:
         """Orchestrates the full query lifecycle."""
+        reset_token_usage()
         wall_start = time.monotonic()
 
         if self.config.instrumented:
@@ -305,6 +322,7 @@ def print_metrics_stderr(metrics: QueryMetrics) -> None:
 def main():
     nest_asyncio.apply()
 
+    # see README.md for usage examples, including complex filter construction
     parser = argparse.ArgumentParser(description="Query the Zettlr MD-RAG Library")
     parser.add_argument("question",      type=str, help="The question to ask.")
     parser.add_argument("--year",        type=int, help="Filter papers by year.")
