@@ -1,11 +1,21 @@
 import os
-from unittest.mock import patch
+import json
+from unittest.mock import patch, MagicMock
 
 import pytest
 from llama_index.core.embeddings.mock_embed_model import MockEmbedding
 from llama_index.core.llms.mock import MockLLM
 
-from zettlr_rag.rag_setup import SYSTEM_PROMPT, load_academic_markdown, main_async
+from zettlr_rag.rag_setup import (
+    SYSTEM_PROMPT, 
+    load_academic_markdown, 
+    main_async,
+    sanitize_metadata,
+    TokenCapturingGemini,
+    get_last_token_usage,
+    setup_settings,
+    _usage_store
+)
 
 
 @pytest.mark.asyncio
@@ -58,3 +68,76 @@ async def test_main_async_survey(temp_chroma_db, temp_metadata_path, tmp_path):
         assert os.path.exists(temp_chroma_db)
         assert os.path.exists(temp_metadata_path)
         assert len(os.listdir(temp_metadata_path)) > 0
+
+def test_sanitize_metadata():
+    raw = {
+        "str": "val",
+        "int": 1,
+        "float": 1.5,
+        "none": None,
+        "list": ["a", "b"],
+        "dict": {"k": "v"},
+        "other": object()
+    }
+    sanitized = sanitize_metadata(raw)
+    assert sanitized["str"] == "val"
+    assert sanitized["int"] == 1
+    assert sanitized["float"] == 1.5
+    assert sanitized["none"] is None
+    assert sanitized["list"] == "a, b"
+    assert sanitized["dict"] == json.dumps({"k": "v"})
+    assert isinstance(sanitized["other"], str)
+
+def test_token_capturing_gemini_store():
+    # Reset store
+    if hasattr(_usage_store, "last_usage"):
+        del _usage_store.last_usage
+    
+    with patch("zettlr_rag.rag_setup.GoogleGenAI.__init__", return_value=None):
+        llm = TokenCapturingGemini(model="models/gemini-1.5-flash", api_key="dummy")
+    
+    # Mock response with raw.usage_metadata
+    resp = MagicMock()
+    resp.raw = MagicMock()
+    resp.raw.usage_metadata = MagicMock()
+    resp.raw.usage_metadata.prompt_token_count = 10
+    resp.raw.usage_metadata.candidates_token_count = 20
+    resp.raw.usage_metadata.cached_content_token_count = 5
+    
+    llm._store(resp)
+    usage = get_last_token_usage()
+    assert usage.input_tokens == 10
+    assert usage.output_tokens == 20
+    assert usage.cache_tokens == 5
+    
+    # Mock response with additional_kwargs
+    resp2 = MagicMock()
+    resp2.raw = None
+    resp2.additional_kwargs = {"prompt_tokens": 100, "completion_tokens": 200}
+    
+    llm._store(resp2)
+    usage = get_last_token_usage()
+    assert usage.input_tokens == 110 # accumulated
+    assert usage.output_tokens == 220
+
+@patch("zettlr_rag.rag_setup.load_dotenv")
+@patch("os.getenv")
+def test_setup_settings_error(mock_getenv, mock_dotenv):
+    mock_getenv.return_value = None
+    with pytest.raises(ValueError, match="API Key not found"):
+        setup_settings()
+
+@patch("zettlr_rag.rag_setup.load_dotenv")
+@patch("os.getenv")
+@patch("os.environ", {})
+def test_setup_settings_success(mock_getenv, mock_dotenv):
+    mock_getenv.side_effect = lambda k, default=None: "dummy_key" if "API_KEY" in k else None
+    
+    with (
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_gemini,
+        patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed
+    ):
+        mock_gemini.return_value = MockLLM()
+        mock_embed.return_value = MockEmbedding(embed_dim=768)
+        setup_settings()
+        assert mock_gemini.called

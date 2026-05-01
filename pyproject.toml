@@ -1,6 +1,6 @@
 [project]
 name = "zettlr-rag"
-version = "0.5.2"
+version = "0.5.3"
 description = "RAG for my academic papers library"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -73,3 +73,26 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_any_generics = true
 warn_return_any = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=zettlr_rag --cov-report=xml --cov-report=term-missing"
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src/zettlr_rag"]
+omit = [
+    "tests/*",
+    "**/__init__.py",
+    "evals/*"
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

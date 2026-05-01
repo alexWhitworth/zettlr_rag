@@ -16,12 +16,14 @@ Score the RAG answer on the following. Respond as JSON.
          - key findings, methodologies, and limitations?
          - Use of LaTeX for equations where appropriate?
          - Python code snippets for clarity where appropriate?
+      Note: the reference answer may contain tables rendered as flat text due to copy/paste 
+      formatting loss. Evaluate based on factual content only.
 
    4. contradiction_detected (Binary: [0, 1]):
       Does the RAG answer contradict any cited finding? 
 
    5. verdict: "better" | "equivalent" | "worse"
-      Overall quality vs. the reference answer.
+      Overall RAG quality vs. the reference answer.
 
     {{"factual_alignment": X, "fluency_coherence_brevity": X,
       "completeness_and_relevance": X, "contradiction_detected": X,
