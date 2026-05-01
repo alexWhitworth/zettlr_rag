@@ -28,8 +28,12 @@ outputs/
 
 # Logs and temporary files
 *.log
-query_log.jsonl
+*.jsonl
 list_models.py
+
+# scripts for copy/paste consensus AI comparisons
+evals/append_consensus.py
+evals/validate_jsonl.py
 
 # Research Notes 
 # (Ignore if you want your research log to stay local)
