@@ -38,3 +38,8 @@ evals/validate_jsonl.py
 # Research Notes 
 # (Ignore if you want your research log to stay local)
 # research_notes.md
+
+# code coverage
+.coverage
+coverage.xml
+codecov_plan.md
