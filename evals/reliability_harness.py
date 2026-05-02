@@ -51,6 +51,22 @@ def _reliability_verdict(cost_cv: float, latency_cv: float, token_cv: float) -> 
 
 @dataclass
 class ReliabilityHarness:
+    """
+    A test harness for evaluating the consistency and reliability of RAG queries.
+
+    This class executes a specified question multiple times and measures the
+    variation in API costs, response latency, token usage, and semantic
+    consistency of the retrieved embeddings. Results are compiled into a
+    report and can be persistently logged for ongoing evaluation.
+
+    Methods
+    -------
+    run_test(question: str, n_runs: int = 5) -> dict
+        Executes the query N times and computes aggregate consistency statistics.
+    print(summary: dict) -> None
+        Prints a formatted reliability report summarizing the results.
+    """
+
     instrumented: bool = False
     semantic_entropy: bool = False
     log_path: str = "evals/data/validation_log.jsonl"

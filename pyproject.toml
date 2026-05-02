@@ -76,15 +76,14 @@ warn_return_any = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=zettlr_rag --cov-report=xml --cov-report=term-missing"
+addopts = "--cov=zettlr_rag --cov=evals.reliability_harness --cov-report=xml --cov-report=term-missing"
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["src/zettlr_rag"]
+source = ["src/zettlr_rag", "evals/reliability_harness.py"]
 omit = [
     "tests/*",
-    "**/__init__.py",
-    "evals/*"
+    "**/__init__.py"
 ]
 
 [tool.coverage.report]
