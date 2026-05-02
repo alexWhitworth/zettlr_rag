@@ -109,21 +109,25 @@ class ReliabilityHarness:
             "cost": {
                 "mean":   round(statistics.mean(costs), 8),
                 "stdev":  round(statistics.stdev(costs), 8) if n_runs > 1 else 0.0,
-                "min":    round(min(costs), 8),
-                "max":    round(max(costs), 8),
+                "p10":    round(float(np.percentile(costs, 10)), 8) if n_runs > 0 else 0.0,
+                "p90":    round(float(np.percentile(costs, 90)), 8) if n_runs > 0 else 0.0,
+                "p95":    round(float(np.percentile(costs, 95)), 8) if n_runs > 0 else 0.0,
                 "cv_pct": round(cv(costs), 2),
             },
             "latency_ms": {
                 "mean":   round(statistics.mean(latencies), 1),
                 "stdev":  round(statistics.stdev(latencies), 1) if n_runs > 1 else 0.0,
-                "min":    round(min(latencies), 1),
-                "max":    round(max(latencies), 1),
-                "p95":    round(sorted(latencies)[int(n_runs * 0.95)] if n_runs > 0 else 0.0, 1),
+                "p10":    round(float(np.percentile(latencies, 10)), 1) if n_runs > 0 else 0.0,
+                "p90":    round(float(np.percentile(latencies, 90)), 1) if n_runs > 0 else 0.0,
+                "p95":    round(float(np.percentile(latencies, 95)), 1) if n_runs > 0 else 0.0,
                 "cv_pct": round(cv(latencies), 2),
             },
             "tokens": {
                 "mean":   round(statistics.mean(tokens), 1),
                 "stdev":  round(statistics.stdev(tokens), 1) if n_runs > 1 else 0.0,
+                "p10":    round(float(np.percentile(tokens, 10)), 1) if n_runs > 0 else 0.0,
+                "p90":    round(float(np.percentile(tokens, 90)), 1) if n_runs > 0 else 0.0,
+                "p95":    round(float(np.percentile(tokens, 95)), 1) if n_runs > 0 else 0.0,
                 "cv_pct": round(cv(tokens), 2),
             },
         }
@@ -158,17 +162,22 @@ class ReliabilityHarness:
         print(f"Runs: {summary['n_runs']}")
         print("\nCost (USD):")
         print(f"  Mean:  ${summary['cost']['mean']:.6f}")
-        print(f"  Stdev: ${summary['cost']['stdev']:.6f}  (CV: {summary['cost']['cv_pct']:.1f}%)")
-        print(f"  Range: ${summary['cost']['min']:.6f} - {summary['cost']['max']:.6f}")
+        print(f"  Stdev: ${summary['cost']['stdev']:.6f}")
+        print(f"  P10:   ${summary['cost']['p10']:.6f}")
+        print(f"  P90:   ${summary['cost']['p90']:.6f}")
+        print(f"  P95:   ${summary['cost']['p95']:.6f}")
         print("\nLatency (ms):")
         print(f"  Mean:  {summary['latency_ms']['mean']:.0f} ms")
-        stdev_lat = summary['latency_ms']['stdev']
-        cv_lat = summary['latency_ms']['cv_pct']
-        print(f"  Stdev: {stdev_lat:.0f} ms  (CV: {cv_lat:.1f}%)")
+        print(f"  Stdev: {summary['latency_ms']['stdev']:.0f} ms")
+        print(f"  P10:   {summary['latency_ms']['p10']:.0f} ms")
+        print(f"  P90:   {summary['latency_ms']['p90']:.0f} ms")
         print(f"  P95:   {summary['latency_ms']['p95']:.0f} ms")
         print("\nTokens:")
         print(f"  Mean:  {summary['tokens']['mean']:.0f}")
-        print(f"  CV:    {summary['tokens']['cv_pct']:.1f}%")
+        print(f"  Stdev: {summary['tokens']['stdev']:.0f}")
+        print(f"  P10:   {summary['tokens']['p10']:.0f}")
+        print(f"  P90:   {summary['tokens']['p90']:.0f}")
+        print(f"  P95:   {summary['tokens']['p95']:.0f}")
 
         em = summary["embedding_metrics"]
         print("\nEmbedding Consistency:")

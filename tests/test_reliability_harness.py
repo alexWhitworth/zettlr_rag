@@ -96,9 +96,9 @@ def test_print_summary(capsys, test_log_path):
     mock_summary = {
         "question": "test question",
         "n_runs": 2,
-        "cost": {"mean": 0.005, "stdev": 0.001, "min": 0.004, "max": 0.006, "cv_pct": 20.0},
-        "latency_ms": {"mean": 250, "stdev": 10, "min": 240, "max": 260, "p95": 260, "cv_pct": 4.0},
-        "tokens": {"mean": 100, "stdev": 5, "cv_pct": 5.0},
+        "cost": {"mean": 0.005, "stdev": 0.001, "p10": 0.004, "p90": 0.006, "p95": 0.006, "cv_pct": 20.0},
+        "latency_ms": {"mean": 250, "stdev": 10, "p10": 240, "p90": 260, "p95": 260, "cv_pct": 4.0},
+        "tokens": {"mean": 100, "stdev": 5, "p10": 95, "p90": 105, "p95": 105, "cv_pct": 5.0},
         "embedding_metrics": {
             "spherical_mean_resultant_length": 0.9,
             "centroid_dispersion": 0.1,
@@ -113,8 +113,10 @@ def test_print_summary(capsys, test_log_path):
     captured = capsys.readouterr()
     assert "RELIABILITY REPORT: test question" in captured.out
     assert "Cost (USD):" in captured.out
+    assert "P10:   $0.004000" in captured.out
     assert "Semantic Entropy (H_sem): 1.5000" in captured.out
     assert "⚠️  ACCEPTABLE" in captured.out
+    assert "CV" not in captured.out
 
 @patch("llama_index.core.Settings")
 @patch("zettlr_rag.rag_setup.setup_settings")
