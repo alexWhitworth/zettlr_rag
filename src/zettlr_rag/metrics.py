@@ -181,7 +181,15 @@ def extract_token_usage_from_response(response) -> TokenUsage:
 
 
 def compute_spherical_mean_resultant_length(embeddings: np.ndarray) -> float:
-    """Compute Spherical Mean Resultant Length (R) of embeddings."""
+    """
+    Compute Spherical Mean Resultant Length (R) of embeddings. R ranges from 0 to 1, where 1 means 
+    all vectors point in the same direction (high semantic similarity)
+    
+    R = || (1/N) * sum(unit_vector_i) || where unit_vector_i is the normalized embedding vector.
+    
+    Returns:
+        R (float)
+    """
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
     # Avoid division by zero
     norms[norms == 0] = 1.0
@@ -190,7 +198,18 @@ def compute_spherical_mean_resultant_length(embeddings: np.ndarray) -> float:
 
 
 def compute_centroid_dispersion(embeddings: np.ndarray) -> float:
-    """Compute Centroid Dispersion (CD) of embeddings."""
+    """
+    Compute Centroid Dispersion (CD) of embeddings. CD is the average distance of each embedding 
+    to the centroid of all embeddings. Lower CD indicates embeddings are more tightly clustered 
+    around the centroid, suggesting higher semantic similarity.
+
+    Note: CD is on a natural scale of the embedding space, not normalized.
+
+    CD = (1/N) * sum(||embedding_i - centroid||) where centroid = (1/N) * sum(embedding_i)
+    
+    Returns:
+        CD (float)
+    """
     if len(embeddings) <= 1:
         return 0.0
     centroid = np.mean(embeddings, axis=0)
@@ -199,7 +218,27 @@ def compute_centroid_dispersion(embeddings: np.ndarray) -> float:
 
 
 def compute_semantic_entropy(embeddings: np.ndarray) -> float:
-    """Compute Semantic Entropy (H_sem) using agglomerative clustering."""
+    """
+    Compute Semantic Entropy (H_sem) using agglomerative clustering. H_sem measures the diversity 
+    of semantic content in the retrieved chunks. Lower H_sem indicates that the retrieved chunks 
+    are more semantically similar to each other, while higher H_sem suggests a wider variety of 
+    semantic content.
+
+    Notes: 
+        1. Gold standard reliability metric, but expensive to compute.
+        2. In this library, we use H_sem to evaluate reliability of RAG answers. Ie. "retrieved 
+        chunks" are repeat answers to the same question. We are evaluating answer consistency.
+
+    Steps:
+        1. Cluster embeddings using Agglomerative Clustering with cosine distance and a threshold
+            of 0.1 (corresponding to cosine similarity of 0.9).
+        2. Calculate the proportion of embeddings in each cluster.
+        3. Compute entropy of the cluster distribution: 
+            H_sem = -sum(p_i * log2(p_i)) where p_i is the proportion of embeddings in cluster i.
+
+    Returns:
+        H_sem (float)
+    """
     if len(embeddings) <= 1:
         return 0.0
 
