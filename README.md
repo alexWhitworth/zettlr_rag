@@ -59,7 +59,10 @@ The system utilizes a multi-stage hybrid retrieval pipeline to ensure high preci
         3. **Gold Standard** Semantic Entropy: $H_\text{sem} = -\sum_i p_i \times log2(p_i))$ where $p_i$ is the proportion of embeddings in cluster i resulting from agglomerative clustering.
 - **Answer Quality:** Implemented an LLM-as-a-Judge pipeline over 75 'goldset' questions covering the span of my acadmeic library
     - RAG answers are compared to [Consensus AI](https://consensus.app/) and associated citations
-    - **Results:** _Pending_
+
+#### Evaluation Results
+
+- _pending_
 
 ### Scientific Persona & Formatting
 
