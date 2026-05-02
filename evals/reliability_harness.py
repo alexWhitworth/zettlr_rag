@@ -9,9 +9,11 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import statistics
 import sys
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -37,83 +39,6 @@ def get_response_embeddings(answers: list[str]) -> np.ndarray:
     return np.array([Settings.embed_model.get_text_embedding(a) for a in answers])
 
 
-def run_reliability_test(
-    question: str,
-    n_runs: int = 5,
-    instrumented: bool = False,
-    semantic_entropy: bool = False,
-) -> dict:
-    """
-    Run a single question N times and compute consistency statistics.
-    """
-    results = []
-
-    print(f"\n🔁 Running '{question}' x {n_runs}...", file=sys.stderr)
-
-    for i in range(1, n_runs + 1):
-        run_id = f"reliability_run_{i}_of_{n_runs}"
-        config = RAGQueryConfig(instrumented=instrumented, run_id=run_id)
-        runner = RAGQueryRunner(config=config)
-        response, metrics = runner.query(question)
-
-        results.append({
-            "run":     i,
-            "answer":  str(response),
-            "metrics": metrics,
-        })
-        msg = f"  Run {i}/{n_runs}: ${metrics.cost_total_usd:.6f} | {metrics.wall_time_ms:.0f}ms"
-        print(msg, file=sys.stderr)
-
-    costs     = [r["metrics"].cost_total_usd  for r in results]
-    latencies = [r["metrics"].wall_time_ms     for r in results]
-    tokens    = [r["metrics"].total_tokens     for r in results]
-    answers   = [r["answer"]                   for r in results]
-
-    def cv(values):
-        """Coefficient of variation."""
-        m = statistics.mean(values)
-        return (statistics.stdev(values) / m * 100) if m > 0 and len(values) > 1 else 0.0
-
-    summary = {
-        "question": question,
-        "n_runs":   n_runs,
-        "cost": {
-            "mean":   round(statistics.mean(costs), 8),
-            "stdev":  round(statistics.stdev(costs), 8) if n_runs > 1 else 0.0,
-            "min":    round(min(costs), 8),
-            "max":    round(max(costs), 8),
-            "cv_pct": round(cv(costs), 2),
-        },
-        "latency_ms": {
-            "mean":   round(statistics.mean(latencies), 1),
-            "stdev":  round(statistics.stdev(latencies), 1) if n_runs > 1 else 0.0,
-            "min":    round(min(latencies), 1),
-            "max":    round(max(latencies), 1),
-            "p95":    round(sorted(latencies)[int(n_runs * 0.95)] if n_runs > 0 else 0.0, 1),
-            "cv_pct": round(cv(latencies), 2),
-        },
-        "tokens": {
-            "mean":   round(statistics.mean(tokens), 1),
-            "stdev":  round(statistics.stdev(tokens), 1) if n_runs > 1 else 0.0,
-            "cv_pct": round(cv(tokens), 2),
-        },
-    }
-
-    embeddings = get_response_embeddings(answers)
-    em = {
-        "spherical_mean_resultant_length": round(
-            compute_spherical_mean_resultant_length(embeddings), 4
-        ),
-        "centroid_dispersion": round(compute_centroid_dispersion(embeddings), 4),
-    }
-    if semantic_entropy:
-        em["semantic_entropy"] = round(compute_semantic_entropy(embeddings), 4)
-    summary["embedding_metrics"] = em
-
-    summary["reliability_verdict"] = _reliability_verdict(cv(costs), cv(latencies), cv(tokens))
-    return summary
-
-
 def _reliability_verdict(cost_cv: float, latency_cv: float, token_cv: float) -> str:
     """Simple heuristic verdict."""
     max_cv = max(cost_cv, latency_cv, token_cv)
@@ -124,36 +49,121 @@ def _reliability_verdict(cost_cv: float, latency_cv: float, token_cv: float) -> 
     return f"❌ INCONSISTENT — max CV {max_cv:.1f}% — investigate temperature/top_k/chunking"
 
 
-def print_summary(summary: dict) -> None:
-    print(f"\n{'='*60}")
-    print(f"RELIABILITY REPORT: {summary['question'][:60]}")
-    print(f"{'='*60}")
-    print(f"Runs: {summary['n_runs']}")
-    print("\nCost (USD):")
-    print(f"  Mean:  ${summary['cost']['mean']:.6f}")
-    print(f"  Stdev: ${summary['cost']['stdev']:.6f}  (CV: {summary['cost']['cv_pct']:.1f}%)")
-    print(f"  Range: ${summary['cost']['min']:.6f} - {summary['cost']['max']:.6f}")
-    print("\nLatency (ms):")
-    print(f"  Mean:  {summary['latency_ms']['mean']:.0f} ms")
-    stdev_lat = summary['latency_ms']['stdev']
-    cv_lat = summary['latency_ms']['cv_pct']
-    print(f"  Stdev: {stdev_lat:.0f} ms  (CV: {cv_lat:.1f}%)")
-    print(f"  P95:   {summary['latency_ms']['p95']:.0f} ms")
-    print("\nTokens:")
-    print(f"  Mean:  {summary['tokens']['mean']:.0f}")
-    print(f"  CV:    {summary['tokens']['cv_pct']:.1f}%")
+@dataclass
+class ReliabilityHarness:
+    instrumented: bool = False
+    semantic_entropy: bool = False
+    log_path: str = "evals/data/validation_log.jsonl"
 
-    em = summary["embedding_metrics"]
-    print("\nEmbedding Consistency:")
-    line = f"  Spherical Mean Resultant Length (R): {em['spherical_mean_resultant_length']:.4f}"
-    print(f"{line} (1.0 = perfect)")
-    print(f"  Centroid Dispersion (CD): {em['centroid_dispersion']:.4f}")
-    if "semantic_entropy" in em:
-        print(f"  Semantic Entropy (H_sem): {em['semantic_entropy']:.4f}")
+    def run_test(self, question: str, n_runs: int = 5) -> dict:
+        """
+        Run a single question N times and compute consistency statistics.
+        """
+        results = []
 
-    print(f"\n{summary['reliability_verdict']}")
-    print(f"{'='*60}\n")
+        print(f"\n🔁 Running '{question}' x {n_runs}...", file=sys.stderr)
 
+        for i in range(1, n_runs + 1):
+            run_id = f"reliability_run_{i}_of_{n_runs}"
+            config = RAGQueryConfig(instrumented=self.instrumented, run_id=run_id)
+            runner = RAGQueryRunner(config=config)
+            response, metrics = runner.query(question)
+
+            results.append({
+                "run":     i,
+                "answer":  str(response),
+                "metrics": metrics,
+            })
+            msg = f"  Run {i}/{n_runs}: ${metrics.cost_total_usd:.6f} | {metrics.wall_time_ms:.0f}ms"
+            print(msg, file=sys.stderr)
+
+        costs     = [r["metrics"].cost_total_usd  for r in results]
+        latencies = [r["metrics"].wall_time_ms     for r in results]
+        tokens    = [r["metrics"].total_tokens     for r in results]
+        answers   = [r["answer"]                   for r in results]
+
+        def cv(values):
+            """Coefficient of variation."""
+            m = statistics.mean(values)
+            return (statistics.stdev(values) / m * 100) if m > 0 and len(values) > 1 else 0.0
+
+        summary = {
+            "question": question,
+            "n_runs":   n_runs,
+            "cost": {
+                "mean":   round(statistics.mean(costs), 8),
+                "stdev":  round(statistics.stdev(costs), 8) if n_runs > 1 else 0.0,
+                "min":    round(min(costs), 8),
+                "max":    round(max(costs), 8),
+                "cv_pct": round(cv(costs), 2),
+            },
+            "latency_ms": {
+                "mean":   round(statistics.mean(latencies), 1),
+                "stdev":  round(statistics.stdev(latencies), 1) if n_runs > 1 else 0.0,
+                "min":    round(min(latencies), 1),
+                "max":    round(max(latencies), 1),
+                "p95":    round(sorted(latencies)[int(n_runs * 0.95)] if n_runs > 0 else 0.0, 1),
+                "cv_pct": round(cv(latencies), 2),
+            },
+            "tokens": {
+                "mean":   round(statistics.mean(tokens), 1),
+                "stdev":  round(statistics.stdev(tokens), 1) if n_runs > 1 else 0.0,
+                "cv_pct": round(cv(tokens), 2),
+            },
+        }
+
+        embeddings = get_response_embeddings(answers)
+        em = {
+            "spherical_mean_resultant_length": round(
+                compute_spherical_mean_resultant_length(embeddings), 4
+            ),
+            "centroid_dispersion": round(compute_centroid_dispersion(embeddings), 4),
+        }
+        if self.semantic_entropy:
+            em["semantic_entropy"] = round(compute_semantic_entropy(embeddings), 4)
+        summary["embedding_metrics"] = em
+
+        summary["reliability_verdict"] = _reliability_verdict(cv(costs), cv(latencies), cv(tokens))
+
+        self._log_result(summary)
+        return summary
+
+    def _log_result(self, summary: dict) -> None:
+        """Write summary to JSONL."""
+        os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+        with open(self.log_path, "a") as f:
+            f.write(json.dumps(summary) + "\n")
+
+    def print(self, summary: dict) -> None:
+        """Print summary report to stdout."""
+        print(f"\n{'='*60}")
+        print(f"RELIABILITY REPORT: {summary['question'][:60]}")
+        print(f"{'='*60}")
+        print(f"Runs: {summary['n_runs']}")
+        print("\nCost (USD):")
+        print(f"  Mean:  ${summary['cost']['mean']:.6f}")
+        print(f"  Stdev: ${summary['cost']['stdev']:.6f}  (CV: {summary['cost']['cv_pct']:.1f}%)")
+        print(f"  Range: ${summary['cost']['min']:.6f} - {summary['cost']['max']:.6f}")
+        print("\nLatency (ms):")
+        print(f"  Mean:  {summary['latency_ms']['mean']:.0f} ms")
+        stdev_lat = summary['latency_ms']['stdev']
+        cv_lat = summary['latency_ms']['cv_pct']
+        print(f"  Stdev: {stdev_lat:.0f} ms  (CV: {cv_lat:.1f}%)")
+        print(f"  P95:   {summary['latency_ms']['p95']:.0f} ms")
+        print("\nTokens:")
+        print(f"  Mean:  {summary['tokens']['mean']:.0f}")
+        print(f"  CV:    {summary['tokens']['cv_pct']:.1f}%")
+
+        em = summary["embedding_metrics"]
+        print("\nEmbedding Consistency:")
+        line = f"  Spherical Mean Resultant Length (R): {em['spherical_mean_resultant_length']:.4f}"
+        print(f"{line} (1.0 = perfect)")
+        print(f"  Centroid Dispersion (CD): {em['centroid_dispersion']:.4f}")
+        if "semantic_entropy" in em:
+            print(f"  Semantic Entropy (H_sem): {em['semantic_entropy']:.4f}")
+
+        print(f"\n{summary['reliability_verdict']}")
+        print(f"{'='*60}\n")
 
 
 def main():
@@ -179,14 +189,14 @@ def main():
     else:
         parser.error("Provide a question or --questions-file")
 
+    harness = ReliabilityHarness(
+        instrumented=instrumented,
+        semantic_entropy=args.semantic_entropy
+    )
+
     for question in questions:
-        summary = run_reliability_test(
-            question,
-            n_runs=args.runs,
-            instrumented=instrumented,
-            semantic_entropy=args.semantic_entropy
-        )
-        print_summary(summary)
+        summary = harness.run_test(question, n_runs=args.runs)
+        harness.print(summary)
 
 
 if __name__ == "__main__":
