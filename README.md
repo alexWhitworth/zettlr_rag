@@ -41,11 +41,25 @@ The system utilizes a multi-stage hybrid retrieval pipeline to ensure high preci
 - **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing double-indexing.
 - **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
 - **Persistent Storage**: Database stored in `./chroma_db_academic`.
+
+### Evaluation
 - **Observability**: Integrates **Langfuse v3+** and **OpenInference** for full-stack RAG observability.
     - Captures query traces, spans, and metadata automatically.
     - Tracks token usage, latency, and cost per query using custom `TokenCapturingGemini` wrapper.
         - Needed due to [llama_index bug](https://github.com/run-llama/llama_index/issues/19293)
     - Persistent local audit log in `query_log.jsonl`.
+- **Reliability:** Do repeated query calls yield equivalent responses?
+    - Implements `ReliabilityHarness` for evaluations
+    - Standard metrics: Cost, latency, token usage
+    - Semantic consistency evaluated based on answer embeddings: 
+        1. Spherical Mean Resultant Length: $R = \frac{1}{N} \sum_i ||\hat v_i||$ where $\hat v_i$ is a unit vector
+            - $R \in [0,1]$. Higher is better
+        2. Centroid Dispersion: $CD = \frac{1}{N} \sum_i ||v_i - \mu||_2$ where $\mu = \frac{1}{n} \sum_i v_i$
+            - $CD \in [0, \infty). Lower is better
+        3. **Gold Standard** Semantic Entropy: $H_\text{sem} = -\sum_i p_i \times log2(p_i))$ where $p_i$ is the proportion of embeddings in cluster i resulting from agglomerative clustering.
+- **Answer Quality:** Implemented an LLM-as-a-Judge pipeline over 75 'goldset' questions covering the span of my acadmeic library
+    - RAG answers are compared to [Consensus AI](https://consensus.app/) and associated citations
+    - **Results:** _Pending_
 
 ### Scientific Persona & Formatting
 
