@@ -45,24 +45,28 @@ The system utilizes a multi-stage hybrid retrieval pipeline to ensure high preci
 ### Evaluation
 - **Observability**: Integrates **Langfuse v3+** and **OpenInference** for full-stack RAG observability.
     - Captures query traces, spans, and metadata automatically.
-    - Tracks token usage, latency, and cost per query using custom `TokenCapturingGemini` wrapper.
-        - Needed due to [llama_index bug](https://github.com/run-llama/llama_index/issues/19293)
+    - Tracks token usage, latency, cost and retrieval metrics per query.
     - Persistent local audit log in `query_log.jsonl`.
 - **Reliability:** Do repeated query calls yield equivalent responses?
-    - Implements `ReliabilityHarness` for evaluations
+    - Implements `ReliabilityHarness` for evaluations with persistant log in `evals/data/validation_log.jsonl`
     - Standard metrics: Cost, latency, token usage
-    - Semantic consistency evaluated based on answer embeddings: 
+    - Semantic consistency evaluations are based on answer embeddings: 
         1. Spherical Mean Resultant Length: $R = \frac{1}{N} \sum_i ||\hat v_i||$ where $\hat v_i$ is a unit vector
             - $R \in [0,1]$. Higher is better
         2. Centroid Dispersion: $CD = \frac{1}{N} \sum_i ||v_i - \mu||_2$ where $\mu = \frac{1}{n} \sum_i v_i$
             - $CD \in [0, \infty). Lower is better
-        3. **Gold Standard** Semantic Entropy: $H_\text{sem} = -\sum_i p_i \times log2(p_i))$ where $p_i$ is the proportion of embeddings in cluster i resulting from agglomerative clustering.
+        3. **Gold Standard** Semantic Entropy: $H_{\text{sem}} = -\sum_i p_i \times log2(p_i))$ where $p_i$ is the proportion of embeddings in cluster i resulting from agglomerative clustering.
 - **Answer Quality:** Implemented an LLM-as-a-Judge pipeline over 75 'goldset' questions covering the span of my acadmeic library
     - RAG answers are compared to [Consensus AI](https://consensus.app/) and associated citations
 
 #### Evaluation Results
 
-- _pending_
+For my corpus, I see:
+
+- **High Reliability:** $R \approxeq 0.98$, $CD \approxeq 0.2$, $H_{\text{sem}} = 0$. Cost, latency, and token usage are all very stable.
+- **Low cost:** roughly 10k tokens and 1/2 cent per query, with input tokens as 95% of total.
+- **Latency:** High (~15-20 sec/query), driven by `LLMRerank`
+- **Answer Quality:** _pending_
 
 ### Scientific Persona & Formatting
 
