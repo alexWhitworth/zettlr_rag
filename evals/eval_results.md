@@ -65,7 +65,7 @@ remain.
 **No.** The current design has very high indexing costs due to using Claude Opus to summarize each
 paper. This is not scalable.
 
-But, for my use case, the summarization SKILL serves two purposes. Firstly, it helps me increase
+But for my use case, the summarization SKILL serves two purposes. Firstly, it helps me increase
 paper reading velocity given sizeable time constraints. By reading the summary first, which
 is more detailed than the abstract, I can determine which papers to read closely. Secondly,
 the paper summaries are useful themselves when reviewing my notes.
