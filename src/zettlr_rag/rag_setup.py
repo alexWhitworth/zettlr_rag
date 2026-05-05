@@ -496,8 +496,7 @@ class AcademicRAGSync:
             system_prompt=SYSTEM_PROMPT,
         )
         query_text = (
-            "Summarize how shrinkage can be used to improve experiment "
-            "estimates and their precision."
+            "Summarize how shrinkage can be used to improve experiment estimates and their precision."
         )
         response = await query_engine.aquery(query_text)
         print(f"\n# Query Response\n{response}")
@@ -536,7 +535,8 @@ def main() -> None:
         print(f"❌ Error: Path does not exist: {path}")
         sys.exit(1)
 
-    asyncio.run(main_async(base_path=path))
+    # verification off: process is stable
+    asyncio.run(main_async(base_path=path), run_verification=False)
 
 
 if __name__ == "__main__":

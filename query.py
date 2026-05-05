@@ -55,7 +55,7 @@ logging.basicConfig(level=logging.WARNING)
 @dataclass(frozen=True)
 class RAGQueryConfig:
     """Configuration for RAG query execution."""
-    similarity_top_k: int = 20
+    similarity_top_k: int = 25
     system_prompt: str = SYSTEM_PROMPT
     instrumented: bool = False
     run_id: str | None = None
@@ -129,7 +129,7 @@ class RAGQueryRunner:
 
         # 3. Post-processing Pipeline
         node_postprocessors = [
-            MMRPostprocessor(mmr_threshold=0.6, top_n=12),
+            MMRPostprocessor(mmr_threshold=0.55, top_n=15),
             LLMRerank(top_n=8),
             LongContextReorder(),
         ]

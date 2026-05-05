@@ -16,7 +16,7 @@ chroma_db_academic/
 data/
 outputs/
 *.pdf
-*.md
+#*.md
 !README.md
 !REFACTOR_NOTES.md
 

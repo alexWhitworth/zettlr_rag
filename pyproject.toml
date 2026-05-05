@@ -1,6 +1,6 @@
 [project]
 name = "zettlr-rag"
-version = "0.5.3"
+version = "0.6.3"
 description = "RAG for my academic papers library"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -76,11 +76,11 @@ warn_return_any = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=zettlr_rag --cov=evals.reliability_harness --cov-report=xml --cov-report=term-missing"
+addopts = "--cov=zettlr_rag --cov=evals.reliability_harness --cov=evals.llm_judge --cov-report=xml --cov-report=term-missing"
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["src/zettlr_rag", "evals/reliability_harness.py"]
+source = ["src/zettlr_rag", "evals/reliability_harness.py", "evals/llm_judge.py"]
 omit = [
     "tests/*",
     "**/__init__.py"

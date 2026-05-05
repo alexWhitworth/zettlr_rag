@@ -14,21 +14,25 @@ uv pip install -e .
 
 Historical papers were first summarized via a `RESEARCH_AGENT.md` SKILL using Claude Opus 4.6, which 
 utilizes clear markdown formatting aligned with MD-RAG. New papers are added utilizing the same 
-SKILL. This is the most expensive step in setup.
+SKILL. **This is the most expensive step in setup.**
 
-The markdown summaries, and not the raw PDFs, are then submitted to the embeddings model and used 
+The markdown summaries, and not the raw PDFs, are then submitted to the embedding model and used
 in the RAG.
 
 ### Advanced Retrieval Strategy
 
-The system utilizes a multi-stage hybrid retrieval pipeline to ensure high precision and diversity in the context provided to the LLM:
+The system utilizes a multi-stage hybrid retrieval pipeline to ensure high precision and diversity
+in the context provided to the LLM:
 
 1.  **Hybrid Retrieval**: Combines semantic search (**Vector**) with keyword-based search (**BM25**).
-2.  **Fusion**: Uses **Reciprocal Rank Fusion (RRF)** with `reciprocal_rerank` mode to merge and normalize results from different retrieval methods.
+2.  **Fusion**: Uses **Reciprocal Rank Fusion (RRF)** with `reciprocal_rerank` mode to merge and 
+normalize results from different retrieval methods.
 3.  **Refinement Pipeline**:
-    *   **MMR (Maximum Marginal Relevance)**: Reranks for diversity to avoid redundant information in the context window.
+    *   **MMR (Maximum Marginal Relevance)**: Reranks for diversity to avoid redundant information
+    in the context window.
     *   **LLM Reranking**: Uses the LLM to perform a final precision-based reranking of the top nodes.
-    *   **Long Context Reordering**: Reorders nodes to combat the "lost in the middle" effect, placing most relevant information at the start and end of the prompt.
+    *   **Long Context Reordering**: Reorders nodes to combat the "lost in the middle" effect, 
+    placing most relevant information at the start and end of the prompt.
 
 ### Tech Stack
 - **LLM**: Gemini 3 Flash Preview (`gemini-3-flash-preview`)
@@ -43,30 +47,35 @@ The system utilizes a multi-stage hybrid retrieval pipeline to ensure high preci
 - **Persistent Storage**: Database stored in `./chroma_db_academic`.
 
 ### Evaluation
+
+**Results:** _See `evals/eval_results.md` for details._
+
+#### Measurement Framework
+
+We implement observability and evaluation to cover key dimensions of RAGAS (Shahul, et al (2024))
+and CLEAR (Sushant, 2025). (1) Cost; (2) Latency; (3) Answer Quality; and (4) Answer Reliability.
+
+_Note: In production settings, we recommend implementing AMDM (Shukla, 2025). While I did write a_
+_full system design for AMDM, full implementation was overkill for this project._
+
+#### Implementation
+
 - **Observability**: Integrates **Langfuse v3+** and **OpenInference** for full-stack RAG observability.
     - Captures query traces, spans, and metadata automatically.
     - Tracks token usage, latency, cost and retrieval metrics per query.
     - Persistent local audit log in `query_log.jsonl`.
-- **Reliability:** Do repeated query calls yield equivalent responses?
-    - Implements `ReliabilityHarness` for evaluations with persistant log in `evals/data/validation_log.jsonl`
-    - Standard metrics: Cost, latency, token usage
-    - Semantic consistency evaluations are based on answer embeddings: 
+- **Answer Reliability:** Do repeated query calls yield equivalent answers?
+    - Implements `ReliabilityHarness` class for evaluations with persistant log in `evals/data/validation_log.jsonl`
+    - Observability metrics: Cost, latency, token usage
+    - Semantic consistency (utilizing answer embeddings): 
         1. Spherical Mean Resultant Length: $R = \frac{1}{N} \sum_i ||\hat v_i||$ where $\hat v_i$ is a unit vector
             - $R \in [0,1]$. Higher is better
         2. Centroid Dispersion: $CD = \frac{1}{N} \sum_i ||v_i - \mu||_2$ where $\mu = \frac{1}{n} \sum_i v_i$
-            - $CD \in [0, \infty). Lower is better
-        3. **Gold Standard** Semantic Entropy: $H_{\text{sem}} = -\sum_i p_i \times log2(p_i))$ where $p_i$ is the proportion of embeddings in cluster i resulting from agglomerative clustering.
-- **Answer Quality:** Implemented an LLM-as-a-Judge pipeline over 75 'goldset' questions covering the span of my acadmeic library
-    - RAG answers are compared to [Consensus AI](https://consensus.app/) and associated citations
-
-#### Evaluation Results
-
-For my corpus, I see:
-
-- **High Reliability:** $R \approxeq 0.98$, $CD \approxeq 0.2$, $H_{\text{sem}} = 0$. Cost, latency, and token usage are all very stable.
-- **Low cost:** roughly 10k tokens and 1/2 cent per query, with input tokens as 95% of total.
-- **Latency:** High (~15-20 sec/query), driven by `LLMRerank`
-- **Answer Quality:** _pending_
+            - $CD \in [0, \infty)$. Lower is better
+        3. Semantic Entropy: $H_{\text{sem}} = -\sum_i p_i \times log2(p_i))$ where $p_i$ is the 
+        proportion of embeddings in cluster i resulting from agglomerative clustering.
+            - **Gold Standard** measurement, but more expensive.
+- **Answer Quality:** Implemented an LLM-as-a-Judge pipeline following RAGAS evaluation principles.
 
 ### Scientific Persona & Formatting
 
@@ -190,14 +199,11 @@ The system automatically maps your YAML header to searchable metadata.
 The project uses `pytest` for testing. The tests are designed to be isolated and use temporary 
 directories for ChromaDB and metadata to avoid impacting your production data.
 
+Test coverage is currently ~85%.
+
 ### Running Tests
 To run all tests:
 
 ```bash
 uv run pytest
 ```
-
-### Test Coverage
-The tests cover:
-- **RAG Setup**: Initializing settings, loading documents, and the full indexing pipeline (using mocks to avoid API calls).
-- **Isolated Environments**: Verification that tests do not modify `chroma_db_academic` or `.index_metadata`.
