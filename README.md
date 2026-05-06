@@ -19,7 +19,7 @@ SKILL. **This is the most expensive step in setup.**
 The markdown summaries, and not the raw PDFs, are then submitted to the embedding model and used
 in the RAG.
 
-### Advanced Retrieval Strategy
+### Retrieval Strategy
 
 The system utilizes a multi-stage hybrid retrieval pipeline to ensure high precision and diversity
 in the context provided to the LLM:
@@ -46,11 +46,21 @@ normalize results from different retrieval methods.
 - **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
 - **Persistent Storage**: Database stored in `./chroma_db_academic`.
 
-### Evaluation
+### Scientific Persona & Formatting
+
+The system uses a **Senior Staff Data Scientist** persona as defined in the `SYSTEM_PROMPT` constant:
+- **BibTeX citations** included for all referenced papers.
+- **LaTeX** for all mathematical expressions.
+- **Python** preferred for code examples.
+- **Pure Markdown** output for direct file redirection/chaining.
+
+The persona is configurable. See `src/zettlr_rag/consts.py` for the `SYSTEM_PROMPT`.
+
+## Evaluation
 
 **Results:** _See `evals/eval_results.md` for details._
 
-#### Measurement Framework
+### Measurement Framework
 
 We implement observability and evaluation to cover key dimensions of RAGAS (Shahul, et al (2024))
 and CLEAR (Sushant, 2025). (1) Cost; (2) Latency; (3) Answer Quality; and (4) Answer Reliability.
@@ -58,7 +68,7 @@ and CLEAR (Sushant, 2025). (1) Cost; (2) Latency; (3) Answer Quality; and (4) An
 _Note: In production settings, we recommend implementing AMDM (Shukla, 2025). While I did write a_
 _full system design for AMDM, full implementation was overkill for this project._
 
-#### Implementation
+### Implementation
 
 - **Observability**: Integrates **Langfuse v3+** and **OpenInference** for full-stack RAG observability.
     - Captures query traces, spans, and metadata automatically.
@@ -76,16 +86,6 @@ _full system design for AMDM, full implementation was overkill for this project.
         proportion of embeddings in cluster i resulting from agglomerative clustering.
             - **Gold Standard** measurement, but more expensive.
 - **Answer Quality:** Implemented an LLM-as-a-Judge pipeline following RAGAS evaluation principles.
-
-### Scientific Persona & Formatting
-
-The system uses a **Senior Staff Data Scientist** persona as defined in the `SYSTEM_PROMPT` constant:
-- **BibTeX citations** included for all referenced papers.
-- **LaTeX** for all mathematical expressions.
-- **Python** preferred for code examples.
-- **Pure Markdown** output for direct file redirection/chaining.
-
-The persona is configurable. See `src/zettlr_rag/consts.py` for the `SYSTEM_PROMPT`.
 
 ## Usage
 
