@@ -75,7 +75,6 @@ the paper summaries are useful themselves when reviewing my notes.
 I'd compare two options, giving a reasonable comparison to SF-RAG, referenced below, but without
 requring building a custom paper tree implementation.
 
-```
 | **Stage**       | **Option A** | **Option B** |
 |-----------------|--------------|--------------|
 | **PDF Parsing** | [Docling](https://www.docling.ai/) | [Nougat](https://github.com/facebookresearch/nougat) |
@@ -84,7 +83,7 @@ requring building a custom paper tree implementation.
 | **Fusion**      | Reciprocal rank | Reciprocal rank |
 | **Merging**     | `AutoMergingRetriever` | `AutoMergingRetriever` |
 | **Reranking**.  | `LLMRerank` | `LLMRerank` |
-```
+
 
 ```bibtex
 @article{yan2026ptrag,
