@@ -80,7 +80,7 @@ requring building a custom paper tree implementation.
 | **PDF Parsing** | [Docling](https://www.docling.ai/) | [Nougat](https://github.com/facebookresearch/nougat) |
 | **Chunking**    | `DoclingNodeParser` | `HierarchicalNodeParser` | 
 | **Retrieval**   | Vector + BM25 | Vector + BM25 |
-| **Fusion**      | Reciprocal rank | Reciprocal rank |
+| **Fusion**      | Reciprocal rerank | Reciprocal rerank |
 | **Merging**     | `AutoMergingRetriever` | `AutoMergingRetriever` |
 | **Reranking**.  | `LLMRerank` | `LLMRerank` |
 
