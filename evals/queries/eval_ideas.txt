@@ -1,0 +1,110 @@
+# ── business_and_industry / advertising ──────────────────────────────────
+"How do auction mechanisms affect efficiency and revenue in online advertising markets?"
+"What is the empirical evidence on the effectiveness of social media advertising on consumer behavior?"
+
+# ── business_and_industry / strategy + entrepreneurship ──────────────────
+"What factors predict new venture survival and growth in technology entrepreneurship?"
+"How does market concentration affect innovation rates in digital industries?"
+
+# ── causal_inference / core + identification ──────────────────────────────
+"What assumptions are required for instrumental variable estimation to yield valid causal estimates?"
+"How does regression discontinuity design compare to difference-in-differences for policy evaluation?"
+"What are the key threats to identification in observational causal inference studies?"
+"What methods quantify the sensitivity of causal estimates to unmeasured confounding?"
+
+# ── causal_inference / methods ────────────────────────────────────────────
+"How do doubly robust estimators compare to propensity score matching in observational studies?"
+"What methods exist for estimating heterogeneous treatment effects in randomized experiments?"
+"How do BART and Bayesian Causal Forests compare for heterogeneous treatment effect estimation?"
+"How do meta-learners such as T-learner and X-learner compare for CATE estimation?"
+"What are synthetic control methods and when are they preferred over difference-in-differences?"
+"How does interference between units affect causal inference in networked or clustered populations?"
+"What are the challenges of causal inference with continuous treatment variables?"
+"How do difference-in-differences estimators handle staggered treatment adoption and what are the pitfalls of two-way fixed effects?"
+"How does mediation analysis decompose total causal effects into direct and indirect pathways?"
+
+# ── causal_inference / IV ─────────────────────────────────────────────────
+"What is the local average treatment effect and how does it differ from the average treatment effect in instrumental variable estimation?"
+
+# ── causal_inference / policy ─────────────────────────────────────────────
+"How is policy learning from observational data distinguished from policy evaluation?"
+
+# ── data_methods ──────────────────────────────────────────────────────────
+"What are best practices for multiple imputation of missing data in statistical analyses?"
+"How does survey weighting affect the validity of population-level inference?"
+
+# ── digital_privacy / differential_privacy ───────────────────────────────
+"What privacy guarantees does differential privacy provide and what are its practical limitations?"
+"How does federated learning preserve user privacy while enabling collaborative model training?"
+"How do local differential privacy mechanisms compare to central differential privacy in utility and privacy tradeoffs?"
+"What are the main attack vectors against differentially private data release mechanisms?"
+"What methods exist for generating differentially private synthetic data?"
+"How do composition theorems govern the accumulation of privacy loss across multiple differentially private computations?"
+"What are the Laplace and Gaussian mechanisms in differential privacy and how do they differ in utility guarantees?"
+"How does differentially private stochastic gradient descent enable privacy-preserving machine learning?"
+"What role do secure multi-party computation and trusted execution environments play in privacy-preserving analytics?"
+
+# ── digital_privacy / behavioral + contextual ────────────────────────────
+"What explains the privacy paradox — the gap between stated privacy preferences and actual behavior?"
+"What is contextual integrity as a normative framework for evaluating information privacy?"
+
+# ── economics / industrial_organization + digital ─────────────────────────
+"How does platform competition affect pricing and welfare in two-sided markets?"
+"What is the empirical evidence on the welfare effects of digital advertising markets?"
+"What methods are used to evaluate antitrust policy in digital platform markets?"
+"How do network effects shape competition and market structure in digital platform markets?"
+"How do auction theory and mechanism design inform the pricing of digital goods and services?"
+
+# ── economics / labor + behavioral ───────────────────────────────────────
+"What is the empirical evidence on how automation affects labor market outcomes and wage inequality?"
+"What behavioral biases most reliably affect financial decision-making and investment outcomes?"
+"What is the empirical evidence on minimum wage effects on employment and wage inequality?"
+
+# ── economics / environment + public_finance ─────────────────────────────
+"How do carbon taxes compare to cap-and-trade systems in reducing greenhouse gas emissions?"
+"What is the evidence on the distributional effects of tax policy on income inequality?"
+"What methods are used to measure and decompose income inequality trends over time?"
+
+# ── experimentation / exp_design ─────────────────────────────────────────
+"What variance reduction techniques are most effective in online A/B testing?"
+"How do multi-armed bandit algorithms compare to fixed A/B testing for online experimentation?"
+"What are the statistical challenges of experimentation in two-sided marketplace platforms?"
+"How does sequential testing affect Type I error rates in adaptive online experiments?"
+"What are best practices for metric selection and interpretation in online controlled experiments?"
+"How does cluster randomization affect statistical power and analysis in online experiments?"
+"What methods exist for detecting and correcting for network interference in online A/B tests?"
+"How do switchback experiments enable causal inference in time-series settings on platforms?"
+
+# ── experimentation / bandits ─────────────────────────────────────────────
+"What is the tradeoff between exploration and exploitation in contextual bandit algorithms for personalization?"
+
+# ── experimentation / surrogacy + shrinkage ───────────────────────────────
+"How should surrogate metrics be used when long-term outcomes are unobservable in experiments?"
+"How does shrinkage estimation improve the reliability of effect size estimates in A/B tests?"
+
+# ── llm ───────────────────────────────────────────────────────────────────
+"What methods are most effective for aligning large language models with human preferences?"
+"How does retrieval-augmented generation improve factual accuracy in large language models?"
+"What evaluation frameworks exist for benchmarking large language model reasoning capabilities?"
+"How does chain-of-thought prompting affect performance on complex reasoning tasks?"
+"What are the key challenges in fine-tuning large language models on domain-specific datasets?"
+"How do LLM-based agents perform on multi-step tool use and planning tasks?"
+
+# ── ml_methods ────────────────────────────────────────────────────────────
+"How does model calibration affect the reliability of probabilistic predictions in classification?"
+"What methods are most effective for improving algorithmic fairness in machine learning models?"
+"How do gradient boosted tree methods compare to deep learning on structured tabular data?"
+"What interpretability methods best explain predictions of complex neural network models?"
+"How do self-supervised representation learning methods compare to supervised approaches on downstream tasks?"
+"What evaluation metrics best capture the quality of unsupervised clustering solutions?"
+"How do collaborative filtering and content-based approaches compare in recommender system design?"
+"What theoretical guarantees do generalization bounds provide for machine learning model performance?"
+
+# ── statistics ────────────────────────────────────────────────────────────
+"What are the advantages of Bayesian hierarchical models over classical multilevel frequentist models?"
+"How does the choice of multiple testing correction method affect false discovery rates?"
+"What statistical methods are used for meta-analysis when studies have heterogeneous designs?"
+"What methods are most effective for anomaly detection in non-stationary time series?"
+"How do Markov Chain Monte Carlo methods enable posterior inference in complex Bayesian models?"
+"What methods are used for variable importance assessment and how do they differ across model classes?"
+"How does spatial autocorrelation affect statistical inference and what methods address it?"
