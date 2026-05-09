@@ -7,11 +7,7 @@ All other modules import GEMINI_PRICING and GEMINI_CONTEXT_WINDOWS from here.
 
 import logging
 import os
-from typing import Optional
-
-from dotenv import load_dotenv
-
-from zettlr_rag.consts import GEMINI_CONTEXT_WINDOWS, GEMINI_PRICING
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +62,7 @@ def init_telemetry() -> bool:
         return False
 
 
-def get_langfuse_client():
+def get_langfuse_client() -> Any:
     """
     Returns the active Langfuse v3 client for score posting.
     Returns None if langfuse is not installed or not configured.

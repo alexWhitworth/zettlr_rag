@@ -4,10 +4,11 @@ No external dependencies — fully unit testable.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
-from scipy.stats import entropy
-from sklearn.cluster import AgglomerativeClustering
+from scipy.stats import entropy  # type: ignore
+from sklearn.cluster import AgglomerativeClustering  # type: ignore
 
 
 @dataclass
@@ -94,7 +95,7 @@ class QueryMetrics:
 def calculate_cost(
     usage: TokenUsage,
     model_name: str,
-    pricing_table: dict,
+    pricing_table: dict[str, dict[str, float]],
 ) -> tuple[float, float, float, float]:
     """
     Calculate cost breakdown from token usage.
@@ -117,7 +118,7 @@ def calculate_cost(
 def calculate_window_utilization(
     input_tokens: int,
     model_name: str,
-    window_table: dict,
+    window_table: dict[str, int],
 ) -> tuple[int, float]:
     """
     Calculate context window utilization percentage.
@@ -133,7 +134,7 @@ def calculate_window_utilization(
     return window_size, round(utilization_pct, 4)
 
 
-def extract_token_usage_from_response(response) -> TokenUsage:
+def extract_token_usage_from_response(response: Any) -> TokenUsage:
     """
     Extract token counts from a LlamaIndex query response backed by Gemini.
     """

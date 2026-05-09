@@ -8,18 +8,21 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import chromadb
-import nest_asyncio
+import nest_asyncio  # type: ignore
 import numpy as np
-from llama_index.core import StorageContext, load_index_from_storage
+from llama_index.core import StorageContext, VectorStoreIndex, load_index_from_storage
+from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.postprocessor import (
     LLMRerank,
     LongContextReorder,
-    SimilarityPostprocessor,
 )
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.retrievers import QueryFusionRetriever, VectorIndexRetriever
+from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
+from llama_index.core.schema import NodeWithScore
 from llama_index.core.vector_stores import (
     FilterCondition,
     MetadataFilter,
@@ -50,6 +53,8 @@ from zettlr_rag.telemetry import (
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING)
+
+__all__ = ["RAGQueryConfig", "RAGQueryRunner", "QueryMetrics"]
 
 
 @dataclass(frozen=True)
@@ -84,13 +89,13 @@ class RAGQueryRunner:
         query: Orchestrates the full query lifecycle from retrieval to metric logging.
     """
 
-    def __init__(self, config: RAGQueryConfig, filters: MetadataFilters | None = None):
+    def __init__(self, config: RAGQueryConfig, filters: MetadataFilters | None = None) -> None:
         self.config = config
         self.filters = filters
         self.engine = self._initialize_engine()
         self.lf_client = get_langfuse_client() if config.instrumented else None
 
-    def _initialize_engine(self):
+    def _initialize_engine(self) -> RetrieverQueryEngine:
         """Connects to the persistent index and returns a hybrid retriever query engine."""
         setup_settings()
         db = chromadb.PersistentClient(path=self.config.chroma_path)
@@ -102,7 +107,7 @@ class RAGQueryRunner:
             vector_store=vector_store,
             persist_dir=self.config.index_persist_dir,
         )
-        index = load_index_from_storage(storage_context)
+        index = cast(VectorStoreIndex, load_index_from_storage(storage_context))
 
         # 1. Base Retrievers
         vector_retriever = VectorIndexRetriever(
@@ -120,10 +125,10 @@ class RAGQueryRunner:
 
         # 2. Fusion
         fusion_retriever = QueryFusionRetriever(
-            [vector_retriever, bm25_retriever],
+            [cast(BaseRetriever, vector_retriever), cast(BaseRetriever, bm25_retriever)],
             similarity_top_k=self.config.similarity_top_k,
             num_queries=1,  # No query generation
-            mode="reciprocal_rerank",
+            mode=FUSION_MODES.RECIPROCAL_RANK,
             use_async=False,
         )
 
@@ -140,7 +145,7 @@ class RAGQueryRunner:
             system_prompt=self.config.system_prompt,
         )
 
-    def query(self, question: str) -> tuple[object, QueryMetrics]:
+    def query(self, question: str) -> tuple[Any, QueryMetrics]:
         """Orchestrates the full query lifecycle."""
         reset_token_usage()
         wall_start = time.monotonic()
@@ -170,9 +175,15 @@ class RAGQueryRunner:
             window_table=GEMINI_CONTEXT_WINDOWS,
         )
 
-        source_nodes = response.source_nodes or []
+        source_nodes: list[NodeWithScore] = response.source_nodes or []
         similarity_scores = [n.get_score() for n in source_nodes if n.get_score() is not None]
-        unique_docs = len(set(n.node.metadata.get("file_name") for n in source_nodes if "file_name" in n.node.metadata))
+        unique_docs = len(
+            {
+                n.node.metadata.get("file_name")
+                for n in source_nodes
+                if "file_name" in n.node.metadata
+            }
+        )
 
         metrics = QueryMetrics(
             question=question,
@@ -212,12 +223,12 @@ class RAGQueryRunner:
 
         return response, metrics
 
-    def _monitored_query(self, question: str):
+    def _monitored_query(self, question: str) -> Any:
         """Inner query call wrapped with Langfuse observation."""
         from langfuse import observe
 
         @observe(name="rag-query")
-        def _run_aquery():
+        def _run_aquery() -> Any:
             # Attempt async query for potentially better metadata preservation
             try:
                 return asyncio.run(self.engine.aquery(question))
@@ -226,12 +237,14 @@ class RAGQueryRunner:
 
         return _run_aquery()
 
-    def _post_scores(self, metrics: QueryMetrics):
+    def _post_scores(self, metrics: QueryMetrics) -> None:
         """Post computed metrics as scores to the current Langfuse trace."""
         from langfuse import observe
 
         @observe(name="post-metrics")
-        def _do_post():
+        def _do_post() -> None:
+            if self.lf_client is None:
+                return
             trace_id = self.lf_client.get_current_trace_id()
             if trace_id:
                 for name, value in metrics.to_langfuse_scores().items():
@@ -277,10 +290,10 @@ class RAGQueryRunner:
             f.write(json.dumps(record) + "\n")
 
 
-def parse_complex_filters(filter_data):
+def parse_complex_filters(filter_data: Any) -> MetadataFilters:
     """Recursively parses a dict into LlamaIndex MetadataFilters."""
     if not isinstance(filter_data, dict):
-        return filter_data
+        return cast(MetadataFilters, filter_data)
 
     condition_str = "and"
     if "or" in filter_data:
@@ -289,7 +302,7 @@ def parse_complex_filters(filter_data):
     else:
         items = filter_data.get("and", [])
 
-    filters = []
+    filters: list[MetadataFilter | MetadataFilters] = []
     for item in items:
         if isinstance(item, dict) and ("and" in item or "or" in item):
             filters.append(parse_complex_filters(item))
@@ -303,7 +316,7 @@ def parse_complex_filters(filter_data):
             )
 
     return MetadataFilters(
-        filters=filters,
+        filters=cast(list[MetadataFilter | MetadataFilters], filters),
         condition=FilterCondition.OR if condition_str == "or" else FilterCondition.AND,
     )
 
@@ -313,17 +326,27 @@ def print_metrics_stderr(metrics: QueryMetrics) -> None:
     print("\n---", file=sys.stderr)
     print("📊 Query Metrics:", file=sys.stderr)
     print(f"  Wall time:             {metrics.wall_time_ms:.0f} ms", file=sys.stderr)
-    print(f"  Tokens (in/out/cache): {metrics.input_tokens} / {metrics.output_tokens} / {metrics.cache_tokens}", file=sys.stderr)
+    print(
+        f"  Tokens (in/out/cache): {metrics.input_tokens} / {metrics.output_tokens} / "
+        f"{metrics.cache_tokens}",
+        file=sys.stderr,
+    )
     print(f"  Total tokens:          {metrics.total_tokens}", file=sys.stderr)
     print(f"  Cost:                  ${metrics.cost_total_usd:.6f} USD", file=sys.stderr)
     print(f"  Window utilization:    {metrics.window_utilization_pct:.2f}%", file=sys.stderr)
     print(f"  Chunks retrieved:      {metrics.chunks_retrieved}", file=sys.stderr)
     print(f"  Documents retrieved:   {metrics.docs_retrieved}", file=sys.stderr)
-    print(f"  Similarity (top/mean): {metrics.top_similarity:.3f} / {metrics.mean_similarity:.3f}", file=sys.stderr)
-    print(f"  Similarity (p10/p90):  {metrics.p10_similarity:.3f} / {metrics.p90_similarity:.3f}", file=sys.stderr)
+    print(
+        f"  Similarity (top/mean): {metrics.top_similarity:.3f} / {metrics.mean_similarity:.3f}",
+        file=sys.stderr,
+    )
+    print(
+        f"  Similarity (p10/p90):  {metrics.p10_similarity:.3f} / {metrics.p90_similarity:.3f}",
+        file=sys.stderr,
+    )
 
 
-def main():
+def main() -> None:
     nest_asyncio.apply()
 
     # see README.md for usage examples, including complex filter construction
@@ -332,10 +355,19 @@ def main():
     parser.add_argument("--year",        type=int, help="Filter papers by year.")
     parser.add_argument("--category",    type=str, help="Filter by folder category.")
     parser.add_argument("--tag",         type=str, help="Filter by specific tag.")
-    parser.add_argument("--filter-json", type=str, help="Complex Boolean logic (JSON string or path to .json file).")
-    parser.add_argument("--run-id",      type=str, help="Optional run ID for reliability testing.", default=None)
-    parser.add_argument("--no-metrics",  action="store_true", help="Suppress metrics output to stderr.")
-    parser.add_argument("--show-sources", action="store_true", help="Display retrieved source nodes.")
+    parser.add_argument(
+        "--filter-json",
+        type=str,
+        help="Complex Boolean logic (JSON string or path to .json file).",
+    )
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        help="Optional run ID for reliability testing.",
+        default=None,
+    )
+    parser.add_argument("--no-metrics",  action="store_true", help="Suppress metrics output.")
+    parser.add_argument("--show-sources", action="store_true", help="Display retrieved nodes.")
 
     args = parser.parse_args()
 
@@ -352,7 +384,7 @@ def main():
             filter_data = json.loads(args.filter_json)
         filters = parse_complex_filters(filter_data)
     else:
-        filter_list = []
+        filter_list: list[MetadataFilter | MetadataFilters] = []
         if args.year:
             filter_list.append(MetadataFilter(key="year", value=args.year))
         if args.category:

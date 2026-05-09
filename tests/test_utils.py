@@ -1,8 +1,9 @@
-import pytest
-import pandas as pd
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-from zettlr_rag.utils import load_query_log, load_langfuse_traces
+
+import pandas as pd
+
+from zettlr_rag.utils import load_langfuse_traces, load_query_log
+
 
 def test_load_query_log_file_not_found(tmp_path, caplog):
     non_existent = tmp_path / "missing.jsonl"
@@ -24,7 +25,7 @@ def test_load_query_log_empty_file(tmp_path):
 def test_load_query_log_valid(tmp_path):
     log_file = tmp_path / "valid.jsonl"
     log_file.write_text('{"timestamp": "2024-01-01T00:00:00Z", "query": "test"}\n')
-    
+
     df = load_query_log(str(log_file))
     assert not df.empty
     assert len(df) == 1
@@ -42,7 +43,7 @@ def test_load_langfuse_traces_connection_failure(mock_dotenv, mock_get_client):
 def test_load_langfuse_traces_full_flow(mock_dotenv, mock_get_client):
     mock_lf = MagicMock()
     mock_get_client.return_value = mock_lf
-    
+
     # Mock traces
     mock_trace = MagicMock()
     mock_trace.id = "trace_1"
@@ -51,19 +52,19 @@ def test_load_langfuse_traces_full_flow(mock_dotenv, mock_get_client):
     mock_trace.metadata = {"model": "gpt-4", "run_id": "run_1"}
     mock_trace.timestamp = "2024-01-01T00:00:00Z"
     mock_trace.latency = 100
-    
+
     mock_lf.fetch_traces.return_value.data = [mock_trace]
-    
+
     # Mock scores
     mock_score = MagicMock()
     mock_score.trace_id = "trace_1"
     mock_score.name = "accuracy"
     mock_score.value = 0.9
-    
+
     mock_lf.fetch_scores.return_value.data = [mock_score]
-    
+
     df = load_langfuse_traces()
-    
+
     assert not df.empty
     assert "accuracy" in df.columns
     assert df.iloc[0]["accuracy"] == 0.9
@@ -76,6 +77,6 @@ def test_load_langfuse_traces_no_data(mock_dotenv, mock_get_client):
     mock_lf = MagicMock()
     mock_get_client.return_value = mock_lf
     mock_lf.fetch_traces.return_value.data = []
-    
+
     df = load_langfuse_traces()
     assert df.empty

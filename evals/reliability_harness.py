@@ -14,12 +14,13 @@ import os
 import statistics
 import sys
 from dataclasses import dataclass
+from typing import Any, cast
 
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from query import RAGQueryConfig, RAGQueryRunner
+from query import QueryMetrics, RAGQueryConfig, RAGQueryRunner
 from zettlr_rag.metrics import (
     compute_centroid_dispersion,
     compute_semantic_entropy,
@@ -71,11 +72,11 @@ class ReliabilityHarness:
     semantic_entropy: bool = False
     log_path: str = "evals/data/validation_log.jsonl"
 
-    def run_test(self, question: str, n_runs: int = 5) -> dict:
+    def run_test(self, question: str, n_runs: int = 5) -> dict[str, Any]:
         """
         Run a single question N times and compute consistency statistics.
         """
-        results = []
+        results: list[dict[str, Any]] = []
 
         print(f"\n🔁 Running '{question}' x {n_runs}...", file=sys.stderr)
 
@@ -90,20 +91,23 @@ class ReliabilityHarness:
                 "answer":  str(response),
                 "metrics": metrics,
             })
-            msg = f"  Run {i}/{n_runs}: ${metrics.cost_total_usd:.6f} | {metrics.wall_time_ms:.0f}ms"
+            msg = (
+                f"  Run {i}/{n_runs}: ${metrics.cost_total_usd:.6f} | "
+                f"{metrics.wall_time_ms:.0f}ms"
+            )
             print(msg, file=sys.stderr)
 
-        costs     = [r["metrics"].cost_total_usd  for r in results]
-        latencies = [r["metrics"].wall_time_ms     for r in results]
-        tokens    = [r["metrics"].total_tokens     for r in results]
-        answers   = [r["answer"]                   for r in results]
+        costs     = [cast(QueryMetrics, r["metrics"]).cost_total_usd  for r in results]
+        latencies = [cast(QueryMetrics, r["metrics"]).wall_time_ms     for r in results]
+        tokens    = [cast(QueryMetrics, r["metrics"]).total_tokens     for r in results]
+        answers   = [cast(str, r["answer"])                           for r in results]
 
-        def cv(values):
+        def cv(values: list[float] | list[int]) -> float:
             """Coefficient of variation."""
             m = statistics.mean(values)
             return (statistics.stdev(values) / m * 100) if m > 0 and len(values) > 1 else 0.0
 
-        summary = {
+        summary: dict[str, Any] = {
             "question": question,
             "n_runs":   n_runs,
             "cost": {
@@ -148,13 +152,13 @@ class ReliabilityHarness:
         self._log_result(summary)
         return summary
 
-    def _log_result(self, summary: dict) -> None:
+    def _log_result(self, summary: dict[str, Any]) -> None:
         """Write summary to JSONL."""
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
         with open(self.log_path, "a") as f:
             f.write(json.dumps(summary) + "\n")
 
-    def print(self, summary: dict) -> None:
+    def print(self, summary: dict[str, Any]) -> None:
         """Print summary report to stdout."""
         print(f"\n{'='*60}")
         print(f"RELIABILITY REPORT: {summary['question'][:60]}")
@@ -191,7 +195,7 @@ class ReliabilityHarness:
         print(f"{'='*60}\n")
 
 
-def main():
+def main() -> None:
     import nest_asyncio
     nest_asyncio.apply()
 

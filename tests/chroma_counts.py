@@ -1,16 +1,19 @@
 """
-This script checks the number of chunks in the ChromaDB collection, how many are tracked in the 
-index's ref_doc_info, and identifies any orphaned chunks that exist in ChromaDB but are not 
-referenced in the index. It also counts how many chunks contain BibTeX entries, which are not 
-meaningful for retrieval. 
+This script checks the number of chunks in the ChromaDB collection, how many are tracked in the
+index's ref_doc_info, and identifies any orphaned chunks that exist in ChromaDB but are not
+referenced in the index. It also counts how many chunks contain BibTeX entries, which are not
+meaningful for retrieval.
 """
 import os
 from typing import cast
+
 import chromadb
 from dotenv import load_dotenv
-from llama_index.core import StorageContext, load_index_from_storage, Settings, VectorStoreIndex
-from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.core import Settings, StorageContext, VectorStoreIndex, load_index_from_storage
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
+from llama_index.vector_stores.chroma import ChromaVectorStore
+
+from zettlr_rag.consts import BIBTEX_PATTERN
 
 load_dotenv()
 if not os.getenv('GOOGLE_API_KEY'):
@@ -41,7 +44,7 @@ orphaned = chroma_ids - tracked_node_ids
 results = col.get(include=['documents'])
 bibtex_chunks = [
     id_ for id_, doc in zip(results['ids'], results['documents'])
-    if doc and '\`\`\`bibtex' in doc
+    if doc and BIBTEX_PATTERN.search(doc)
 ]
 
 print(f'Chunks in ChromaDB:              {len(chroma_ids)}')

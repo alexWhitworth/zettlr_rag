@@ -1,20 +1,20 @@
-import os
 import json
-from unittest.mock import patch, MagicMock
+import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 from llama_index.core.embeddings.mock_embed_model import MockEmbedding
 from llama_index.core.llms.mock import MockLLM
 
+from zettlr_rag.consts import SYSTEM_PROMPT
 from zettlr_rag.rag_setup import (
-    SYSTEM_PROMPT, 
-    load_academic_markdown, 
+    TokenCapturingGemini,
+    _usage_store,
+    get_last_token_usage,
+    load_academic_markdown,
     main_async,
     sanitize_metadata,
-    TokenCapturingGemini,
-    get_last_token_usage,
     setup_settings,
-    _usage_store
 )
 
 
@@ -92,10 +92,10 @@ def test_token_capturing_gemini_store():
     # Reset store
     if hasattr(_usage_store, "last_usage"):
         del _usage_store.last_usage
-    
+
     with patch("zettlr_rag.rag_setup.GoogleGenAI.__init__", return_value=None):
         llm = TokenCapturingGemini(model="models/gemini-1.5-flash", api_key="dummy")
-    
+
     # Mock response with raw.usage_metadata
     resp = MagicMock()
     resp.raw = MagicMock()
@@ -103,18 +103,18 @@ def test_token_capturing_gemini_store():
     resp.raw.usage_metadata.prompt_token_count = 10
     resp.raw.usage_metadata.candidates_token_count = 20
     resp.raw.usage_metadata.cached_content_token_count = 5
-    
+
     llm._store(resp)
     usage = get_last_token_usage()
     assert usage.input_tokens == 10
     assert usage.output_tokens == 20
     assert usage.cache_tokens == 5
-    
+
     # Mock response with additional_kwargs
     resp2 = MagicMock()
     resp2.raw = None
     resp2.additional_kwargs = {"prompt_tokens": 100, "completion_tokens": 200}
-    
+
     llm._store(resp2)
     usage = get_last_token_usage()
     assert usage.input_tokens == 110 # accumulated
@@ -132,7 +132,7 @@ def test_setup_settings_error(mock_getenv, mock_dotenv):
 @patch("os.environ", {})
 def test_setup_settings_success(mock_getenv, mock_dotenv):
     mock_getenv.side_effect = lambda k, default=None: "dummy_key" if "API_KEY" in k else None
-    
+
     with (
         patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_gemini,
         patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed

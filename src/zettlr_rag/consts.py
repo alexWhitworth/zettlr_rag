@@ -2,6 +2,7 @@
 """
 Central repository for all constants used in zettlr_rag.
 """
+import re
 
 # ── LLM Models ──────────────────────────────────────────────────────────────
 MODEL_NAME = "gemini-3-flash-preview"
@@ -67,3 +68,8 @@ GEMINI_CONTEXT_WINDOWS: dict[str, int] = {
     "gemini-embedding-2-preview":       8_192,
     "gemini-embedding-2-preview-batch": 8_192,
 }
+
+# --── Patterns ─────────────────────────────────────────────────────────────────
+BIBTEX_PATTERN = re.compile(
+    r"```bibtex|@(?:book|article|misc|inproceedings|phdthesis|techreport|unpublished)\b"
+)

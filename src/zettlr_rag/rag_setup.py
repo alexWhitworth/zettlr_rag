@@ -3,10 +3,11 @@ import logging
 import os
 import re
 import threading
+from collections.abc import Sequence
 from typing import Any, cast
 
 import chromadb
-import frontmatter
+import frontmatter  # type: ignore
 from chromadb.api.models.Collection import Collection
 from dotenv import load_dotenv
 from llama_index.core import (
@@ -17,7 +18,7 @@ from llama_index.core import (
     VectorStoreIndex,
     load_index_from_storage,
 )
-from llama_index.core.base.llms.types import CompletionResponse, ChatResponse
+from llama_index.core.base.llms.types import ChatMessage, ChatResponse, CompletionResponse
 from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.schema import (
     MetadataMode,
@@ -28,16 +29,13 @@ from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from zettlr_rag.consts import EMBEDDING_MODEL_NAME, MODEL_NAME, SYSTEM_PROMPT
+from zettlr_rag.consts import BIBTEX_PATTERN, EMBEDDING_MODEL_NAME, MODEL_NAME, SYSTEM_PROMPT
+from zettlr_rag.metrics import TokenUsage
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-import threading
-from llama_index.llms.google_genai import GoogleGenAI
-from zettlr_rag.metrics import TokenUsage
 
 _usage_store = threading.local()
 
@@ -48,7 +46,7 @@ def reset_token_usage() -> None:
 
 def get_last_token_usage() -> TokenUsage:
     """Returns token usage captured from the most recent Gemini calls."""
-    return getattr(_usage_store, "last_usage", TokenUsage())
+    return cast(TokenUsage, getattr(_usage_store, "last_usage", TokenUsage()))
 
 
 class TokenCapturingGemini(GoogleGenAI):
@@ -63,32 +61,39 @@ class TokenCapturingGemini(GoogleGenAI):
     LLMRerank + Synthesis) into thread-local storage before llama_index drops the data.
     """
 
-    def complete(self, prompt, **kwargs):
-        response = super().complete(prompt, **kwargs)
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+    def complete(self, prompt: str, formatted: bool = False, **kwargs: Any) -> CompletionResponse:
+        response = cast(CompletionResponse, super().complete(prompt, formatted=formatted, **kwargs))
         self._store(response)
         return response
 
-    def chat(self, messages, **kwargs):
-        response = super().chat(messages, **kwargs)
+    def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
+        response = cast(ChatResponse, super().chat(messages, **kwargs))
         self._store(response)
         return response
 
-    async def acomplete(self, prompt, **kwargs):
-        response = await super().acomplete(prompt, **kwargs)
+    async def acomplete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
+    ) -> CompletionResponse:
+        response = cast(
+            CompletionResponse, await super().acomplete(prompt, formatted=formatted, **kwargs)
+        )
         self._store(response)
         return response
 
-    async def achat(self, messages, **kwargs):
-        response = await super().achat(messages, **kwargs)
+    async def achat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
+        response = cast(ChatResponse, await super().achat(messages, **kwargs))
         self._store(response)
         return response
 
-    def _store(self, response) -> None:
+    def _store(self, response: Any) -> None:
         try:
             # Initialize if not exists
             if not hasattr(_usage_store, "last_usage"):
                 _usage_store.last_usage = TokenUsage()
-                
+
             current_usage = _usage_store.last_usage
 
             # Try raw attribute first
@@ -103,15 +108,15 @@ class TokenCapturingGemini(GoogleGenAI):
 
             # Try additional_kwargs
             extra = getattr(response, "additional_kwargs", {}) or {}
-            
+
             # Map based on observed keys: 'prompt_tokens', 'completion_tokens', 'total_tokens'
             input_tokens = extra.get("prompt_tokens", 0)
             output_tokens = extra.get("completion_tokens", 0)
-            
+
             if input_tokens or output_tokens:
                 current_usage.input_tokens += input_tokens or 0
                 current_usage.output_tokens += output_tokens or 0
-                
+
         except Exception:
             pass  # Falls through — not fatal
 
@@ -412,9 +417,10 @@ class AcademicRAGSync:
 
             nodes = parser.get_nodes_from_documents(batch_docs)
             nodes = [
-                n for n in nodes 
+                n for n in nodes
+                # Filter short nodes and raw BibTeX blocks
                 if len(n.get_content().strip()) >= 20
-                and '```bibtex' not in n.get_content()  # Filter short nodes and raw BibTeX blocks
+                and not BIBTEX_PATTERN.search(n.get_content())
             ]
 
             if not nodes:

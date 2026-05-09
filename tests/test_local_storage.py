@@ -11,10 +11,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from query import RAGQueryConfig, RAGQueryRunner
 from zettlr_rag.metrics import QueryMetrics
 
+
 def test_append_to_local_log(tmp_path):
     # Setup test file
     test_log = tmp_path / "test_query_log.jsonl"
-    
+
     # Setup runner with test config
     config = RAGQueryConfig(log_path=str(test_log))
     # Mock engine and telemetry initialization to avoid real API/DB calls
@@ -22,9 +23,9 @@ def test_append_to_local_log(tmp_path):
         mp.setattr("query.setup_settings", lambda: None)
         mp.setattr("chromadb.PersistentClient", MagicMock())
         mp.setattr("llama_index.core.VectorStoreIndex.from_vector_store", MagicMock())
-        
+
         runner = RAGQueryRunner(config=config)
-    
+
     # Create sample metrics
     metrics = QueryMetrics(
         question="What is shrinkage?",
@@ -42,17 +43,17 @@ def test_append_to_local_log(tmp_path):
         p90_similarity=0.85
     )
     answer = "Shrinkage is a statistical technique."
-    
+
     # Execute method
     runner._append_to_local_log(metrics, answer)
-    
+
     # Verify file content
     assert os.path.exists(test_log)
-    with open(test_log, "r") as f:
+    with open(test_log) as f:
         lines = f.readlines()
         assert len(lines) == 1
         record = json.loads(lines[0])
-        
+
         assert record["question"] == metrics.question
         assert record["answer"] == answer
         assert record["model_name"] == metrics.model_name
@@ -67,18 +68,18 @@ def test_append_to_local_log(tmp_path):
 def test_append_to_local_log_multiple_entries(tmp_path):
     test_log = tmp_path / "test_multi_log.jsonl"
     config = RAGQueryConfig(log_path=str(test_log))
-    
+
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr("query.setup_settings", lambda: None)
         mp.setattr("chromadb.PersistentClient", MagicMock())
         mp.setattr("llama_index.core.VectorStoreIndex.from_vector_store", MagicMock())
         runner = RAGQueryRunner(config=config)
-    
+
     metrics = QueryMetrics(question="Q1")
     runner._append_to_local_log(metrics, "A1")
     runner._append_to_local_log(metrics, "A2")
-    
-    with open(test_log, "r") as f:
+
+    with open(test_log) as f:
         lines = f.readlines()
         assert len(lines) == 2
         assert json.loads(lines[0])["answer"] == "A1"

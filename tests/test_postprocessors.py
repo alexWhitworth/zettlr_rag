@@ -3,7 +3,7 @@ from llama_index.core.schema import NodeWithScore, TextNode
 from zettlr_rag.postprocessors import MMRPostprocessor
 
 
-def test_mmr_postprocessor_diversity():
+def test_mmr_postprocessor_diversity() -> None:
     # Create nodes with specific embeddings to test diversity selection
     # Node 0 and Node 1 are very similar
     # Node 2 is different
@@ -20,11 +20,11 @@ def test_mmr_postprocessor_diversity():
     selected_nodes = postprocessor.postprocess_nodes(nodes)
 
     assert len(selected_nodes) == 2
-    assert selected_nodes[0].node.text == "Node 0"
-    assert selected_nodes[1].node.text == "Node 2"
+    assert selected_nodes[0].get_content() == "Node 0"
+    assert selected_nodes[1].get_content() == "Node 2"
 
 
-def test_mmr_postprocessor_relevance_dominant():
+def test_mmr_postprocessor_relevance_dominant() -> None:
     # If mmr_threshold is high, it should favor relevance (scores)
     node0 = NodeWithScore(node=TextNode(text="Node 0", embedding=[1.0, 0.0]), score=0.9)
     node1 = NodeWithScore(node=TextNode(text="Node 1", embedding=[0.9, 0.1]), score=0.85)
@@ -37,5 +37,5 @@ def test_mmr_postprocessor_relevance_dominant():
     selected_nodes = postprocessor.postprocess_nodes(nodes)
 
     assert len(selected_nodes) == 2
-    assert selected_nodes[0].node.text == "Node 0"
-    assert selected_nodes[1].node.text == "Node 1"
+    assert selected_nodes[0].get_content() == "Node 0"
+    assert selected_nodes[1].get_content() == "Node 1"

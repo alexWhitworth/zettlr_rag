@@ -1,52 +1,18 @@
 # src/zettlr_rag/utils.py
 """
-Utility functions for zettlr_rag.
-"""
-
-import pandas as pd
-import os
-
-def load_query_log(log_path: str = "query_log.jsonl") -> pd.DataFrame:
-    """
-    Load the local JSONL query log into a pandas DataFrame.
-
-    Args:
-        path: Path to the .jsonl file. Defaults to query_log.jsonl
-              in the current working directory.
-
-    Returns:
-        DataFrame with one row per query, columns for all metrics.
-        Returns empty DataFrame if file doesn't exist.
-    """
-    if not os.path.exists(log_path):
-        raise FileNotFoundError(f"Log file not found: {log_path}")
-        
-    df = pd.read_json(log_path, lines=True)
-
-    if df.empty:
-        return df
-
-    # Parse timestamp to datetime with UTC timezone
-    if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-
-    return df
-
-"""
 Utility functions for loading observability data into pandas DataFrames.
 Supports both the local JSONL log and Langfuse SDK fetch.
 """
 
-import os
-import json
 import logging
 from pathlib import Path
-from datetime import timezone
+
+import pandas as pd  # type: ignore
 
 log = logging.getLogger(__name__)
 
 
-def load_query_log(path: str = "query_log.jsonl") -> "pd.DataFrame":
+def load_query_log(path: str = "query_log.jsonl") -> pd.DataFrame:
     """
     Load the local JSONL query log into a pandas DataFrame.
 
@@ -58,8 +24,6 @@ def load_query_log(path: str = "query_log.jsonl") -> "pd.DataFrame":
         DataFrame with one row per query, columns for all metrics.
         Returns empty DataFrame if file doesn't exist.
     """
-    import pandas as pd
-
     p = Path(path)
     if not p.exists():
         log.warning(f"Query log not found at {p.resolve()} — returning empty DataFrame")
@@ -77,14 +41,13 @@ def load_query_log(path: str = "query_log.jsonl") -> "pd.DataFrame":
     return df
 
 
-def load_langfuse_traces() -> "pd.DataFrame":
+def load_langfuse_traces() -> pd.DataFrame:
     """
     Fetch all traces + scores from local Langfuse instance
     and return as a single flat DataFrame (one row per query).
 
     Requires Langfuse to be running and .env.langfuse to be configured.
     """
-    import pandas as pd
     from dotenv import load_dotenv
 
     load_dotenv(dotenv_path=".env.langfuse", override=False)
@@ -97,7 +60,7 @@ def load_langfuse_traces() -> "pd.DataFrame":
         return pd.DataFrame()
 
     # ── Fetch traces ──────────────────────────────────────────────────────────
-    traces = lf.fetch_traces().data
+    traces = lf.fetch_traces().data  # type: ignore
     trace_rows = []
     for t in traces:
         trace_rows.append({
@@ -115,7 +78,7 @@ def load_langfuse_traces() -> "pd.DataFrame":
         return traces_df
 
     # ── Fetch scores and pivot wide ───────────────────────────────────────────
-    scores = lf.fetch_scores().data
+    scores = lf.fetch_scores().data  # type: ignore
     score_rows = [
         {"trace_id": s.trace_id, "metric": s.name, "value": s.value}
         for s in scores

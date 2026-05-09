@@ -1,7 +1,8 @@
 # tests/test_telemetry.py
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 
 class TestInitTelemetry:

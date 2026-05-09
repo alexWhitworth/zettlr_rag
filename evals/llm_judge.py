@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import Any
+from typing import Any, cast
 
 from llama_index.llms.google_genai import GoogleGenAI
 
@@ -74,8 +74,8 @@ def llm_judge(
     """
     Evaluates a RAG response against a reference using Gemini.
 
-    Notes: 
-    1. This implementation uses Gemini for both evaluation and as the underlying LLM for the 
+    Notes:
+    1. This implementation uses Gemini for both evaluation and as the underlying LLM for the
     RAG system, which may suffer from self-preference bias ("egocentric bias"). In practice, it is
     advisable to use a different model for evaluation.
     2. For this library, we used Claude Sonnet 4.6 for LLM-as-a-judge evaluation. That evaluation
@@ -107,7 +107,7 @@ def llm_judge(
         # Try to find JSON block in case model added markdown or preamble
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
-            return json.loads(match.group(0))
-        return json.loads(text)
+            return cast(dict[str, Any], json.loads(match.group(0)))
+        return cast(dict[str, Any], json.loads(text))
     except (json.JSONDecodeError, ValueError) as e:
         raise RuntimeError(f"Failed to parse LLM judge response as JSON: {text}") from e
