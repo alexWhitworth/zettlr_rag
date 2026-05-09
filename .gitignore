@@ -35,6 +35,9 @@ list_models.py
 evals/append_consensus.py
 evals/validate_jsonl.py
 
+# planning
+pg_implement.md
+
 # Research Notes 
 # (Ignore if you want your research log to stay local)
 # research_notes.md

@@ -367,7 +367,7 @@ class AcademicRAGSync:
 
                 # Cleanup and Transfer in Docstore
                 try:
-                    self.index.delete_ref_doc(s_id, delete_from_vector_store=False)
+                    self.index.delete_ref_doc(s_id, raise_error=False)
                 except Exception as e:
                     logger.warning(f"Could not delete old ref doc {s_id} during move: {e}")
 
