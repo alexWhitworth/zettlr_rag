@@ -1,6 +1,12 @@
 # Zettlr RAG (MD-RAG)
 
-A specialized Retrieval-Augmented Generation (RAG) system for academic paper libraries. This system implements **MD-RAG** (Metadata RAG), preserving and utilizing YAML frontmatter from Zettlr markdown files for high-precision scientific retrieval.
+A specialized Retrieval-Augmented Generation (RAG) system for personal note libraries. This system 
+implements **MD-RAG** (Metadata RAG), preserving and utilizing YAML frontmatter from Zettlr markdown 
+files for high-precision scientific retrieval.
+
+It can be thought of as the "fancy RAG" that [Karpathy](https://x.com/karpathy/status/2039805659525644595)
+notes that he doesn't need for his ~100 file LLM knowledge base. My implementation was fully evaluated
+with ~700 academic 
 
 ## Installation
 
@@ -10,14 +16,18 @@ uv pip install -e .
 
 ## Architectural Design
 
-### Initialization
+### Initialization: Ingest and Compile
 
-Historical papers were first summarized via a `RESEARCH_AGENT.md` SKILL using Claude Opus 4.6, which 
+1. Academic papers were first summarized via a `RESEARCH_AGENT.md` SKILL using Claude Opus 4.6, which 
 utilizes clear markdown formatting aligned with MD-RAG. New papers are added utilizing the same 
-SKILL. **This is the most expensive step in setup.**
+SKILL. **This is the most expensive step in setup.** The markdown summaries, and not the raw PDFs, 
+are then submitted to the embedding model and used in the RAG.
+2. Books and blog-post notes, which come from reading non-fiction books and articles over time, are 
+cleaned up. Specifically, some books have meticulous "book-report" style notes while others are just
+raw dumps of [Kindle highlighting](https://read.amazon.com/notebook). I designed and use a 
+`MARKDOWN_CLEANUP.md` SKILL to compile these to a standard format.
 
-The markdown summaries, and not the raw PDFs, are then submitted to the embedding model and used
-in the RAG.
+_Note: 
 
 ### Retrieval Strategy
 
