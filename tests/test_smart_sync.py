@@ -1,3 +1,4 @@
+import chromadb
 import os
 from unittest.mock import patch
 
@@ -99,3 +100,36 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         await sync_manager.run_sync(run_verification=False)
         captured = capsys.readouterr()
         assert "1 stale files to prune" in captured.out
+
+        # --- PHASE 5: Root Folder Rename ---
+        # Simulate moving Zettlr-Papers -> Zettlr/Papers
+        new_lib_path = os.path.join(temp_workspace["root"], "new_library")
+        os.rename(lib_path, new_lib_path)
+
+        # Update sync manager to point to new path
+        sync_manager.base_path = new_lib_path
+
+        chroma_before = len(set(
+            chromadb.PersistentClient(path=chroma_path)
+            .get_collection("research_papers")
+            .get()["ids"]
+        ))
+
+        await sync_manager.run_sync(run_verification=False)
+        captured = capsys.readouterr()
+
+        chroma_after = len(set(
+            chromadb.PersistentClient(path=chroma_path)
+            .get_collection("research_papers")
+            .get()["ids"]
+        ))
+
+        # All docs should be detected as moves, none as new/stale
+        assert "1 stale files to prune" in captured.out
+        assert "3 moved files to update metadata" in captured.out
+        assert "0 new files to embed" in captured.out
+        assert chroma_after == chroma_before, (
+            f"ChromaDB chunks changed during root rename: {chroma_before} -> {chroma_after}"
+        )
+
+

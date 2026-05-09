@@ -356,6 +356,7 @@ class AcademicRAGSync:
                 for node in nodes:
                     # Update relationships and metadata
                     node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=n_doc.id_)
+                    node.relationships[NodeRelationship.SOURCE] = RelatedNodeInfo(node_id=n_doc.id_)
                     node.metadata = {**node.metadata, **n_doc.metadata}
 
                     # Update metadata in Chroma
@@ -367,9 +368,13 @@ class AcademicRAGSync:
 
                 # Cleanup and Transfer in Docstore
                 try:
-                    self.index.delete_ref_doc(s_id, raise_error=False)
+                    self.index.docstore.delete_ref_doc(s_id)
                 except Exception as e:
-                    logger.warning(f"Could not delete old ref doc {s_id} during move: {e}")
+                    logger.warning(f"Could not delete ref_doc_info {s_id} from docstore: {e}")
+                try:
+                    self.index.docstore.delete_document(s_id)
+                except Exception as e:
+                    logger.warning(f"Could not delete document {s_id} from docstore: {e}")
 
                 # Finalize new doc in docstore
                 self.index.docstore.add_documents(nodes, allow_update=True)
