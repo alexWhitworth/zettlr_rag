@@ -62,15 +62,17 @@ remain.
 
 1. **Would I implement this sytem in production?**
 
-**No.** The current design has very high indexing costs due to using Claude Opus to summarize each
-paper. This is not scalable.
+- _If we view this system as a pure academic RAG_, **uniquivocally No.** The current design has very 
+high indexing costs due to using Claude Opus to summarize each paper. This is not scalable.
+- _But if we instead view it as an "LLM Knowledge Base" (eg. [Karpathy](https://x.com/karpathy/status/2039805659525644595))_
+**then this is a very useful system.** It has several valuable components:
+  - A. The `RESEARCH_AGENT.md` skill for paper summarization increases my paper reading velocity.
+  It also creates useful summaries for me to review deeply.
+  - B. Karpathy mentions that "things get interesting as the knowlege base gets big", noting that
+  he doesn't need a "fancy RAG" and gets good performance given ~100 papers. My wiki has 700
+  papers (and growing). Is this over-engineering? Maybe. But it's useful
 
-But for my use case, the summarization SKILL serves two purposes. Firstly, it helps me increase
-paper reading velocity given sizeable time constraints. By reading the summary first, which
-is more detailed than the abstract, I can determine which papers to read closely. Secondly,
-the paper summaries are useful themselves when reviewing my notes.
-
-2. **What would I implement?**
+2. **For Academic RAG, What would I implement?**
 
 I'd compare two options, giving a reasonable comparison to SF-RAG, referenced below, but without
 requring building a custom paper tree implementation.
@@ -94,3 +96,18 @@ requring building a custom paper tree implementation.
   year={2026}
 }
 ```
+
+3. **For Karpathy-esque LLM Knowledge base, what would I implement?**
+
+**This RAG as is.** I currently have ~700 academic papers in my RAG index. But I also have ~450
+nonfiction books and articles that I've kept detailed reading notes, or kindle highlights, over
+the past 10-15 years. I also have ~250 markdown files of notes from my work career -- from when
+I used documented notes instead of paper and pen.
+
+I am now extending my RAG to include these additional sources.
+
+- **What is missing?** The Karpathy idea requires structing the database as a knowledge graph,
+with file links. It also adds linting rules for regular maintenance. I have not implemented either,
+instead using RAG and retrieval instead. 
+  - **TODO:** Add `llama_index`'s `PropertyGraphIndex` and PG retrieval for in the existing 
+  `QueryFusionRetriever` retriever.
