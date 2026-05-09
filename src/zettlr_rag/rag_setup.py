@@ -525,7 +525,7 @@ def main() -> None:
     # Default to the full library root
     default_path = (
         "/Users/awhitworth/Library/CloudStorage/"
-        "ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers"
+        "ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr/Papers"
     )
     import sys
 
@@ -536,7 +536,7 @@ def main() -> None:
         sys.exit(1)
 
     # verification off: process is stable
-    asyncio.run(main_async(base_path=path), run_verification=False)
+    asyncio.run(main_async(base_path=path, run_verification=False))
 
 
 if __name__ == "__main__":
