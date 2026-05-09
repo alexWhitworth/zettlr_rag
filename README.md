@@ -27,8 +27,6 @@ cleaned up. Specifically, some books have meticulous "book-report" style notes w
 raw dumps of [Kindle highlighting](https://read.amazon.com/notebook). I designed and use a 
 `MARKDOWN_CLEANUP.md` SKILL to compile these to a standard format.
 
-_Note: 
-
 ### Retrieval Strategy
 
 The system utilizes a multi-stage hybrid retrieval pipeline to ensure high precision and diversity
@@ -44,6 +42,8 @@ normalize results from different retrieval methods.
     *   **Long Context Reordering**: Reorders nodes to combat the "lost in the middle" effect, 
     placing most relevant information at the start and end of the prompt.
 
+- **TODO:** _See `evals/eval_results.md`_
+
 ### Tech Stack
 - **LLM**: Gemini 3 Flash Preview (`gemini-3-flash-preview`)
 - **Embeddings**: Gemini Embedding 2 Preview (`gemini-embedding-2-preview`)
@@ -51,7 +51,7 @@ normalize results from different retrieval methods.
 - **Persona**: Senior Staff Data Scientist, Algorithms
 
 ### Implementation Details
-- **Structural Parsing**: Uses `MarkdownNodeParser` to preserve headers and logical sections.
+- **Structural Parsing**: U ses `MarkdownNodeParser` to preserve headers and logical sections.
 - **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing double-indexing.
 - **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
 - **Persistent Storage**: Database stored in `./chroma_db_academic`.
