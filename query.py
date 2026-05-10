@@ -13,7 +13,12 @@ from typing import Any, cast
 import chromadb
 import nest_asyncio  # type: ignore
 import numpy as np
-from llama_index.core import StorageContext, VectorStoreIndex, load_index_from_storage
+from llama_index.core import (
+    PropertyGraphIndex,
+    StorageContext,
+    VectorStoreIndex,
+    load_index_from_storage,
+)
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.postprocessor import (
     LLMRerank,
@@ -32,8 +37,11 @@ from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from zettlr_rag.consts import (
+    CHROMA_PATH,
     GEMINI_CONTEXT_WINDOWS,
     GEMINI_PRICING,
+    GRAPH_INDEX_PATH,
+    METADATA_PATH,
     MODEL_NAME,
     SYSTEM_PROMPT,
 )
@@ -54,18 +62,20 @@ from zettlr_rag.telemetry import (
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING)
 
-__all__ = ["RAGQueryConfig", "RAGQueryRunner", "QueryMetrics"]
+__all__ = ["QueryMetrics", "RAGQueryConfig", "RAGQueryRunner"]
 
 
 @dataclass(frozen=True)
 class RAGQueryConfig:
     """Configuration for RAG query execution."""
+
     similarity_top_k: int = 25
     system_prompt: str = SYSTEM_PROMPT
     instrumented: bool = False
     run_id: str | None = None
-    chroma_path: str = "./chroma_db_academic"
-    index_persist_dir: str = "./.index_metadata"
+    chroma_path: str = CHROMA_PATH
+    index_persist_dir: str = METADATA_PATH
+    graph_path: str = GRAPH_INDEX_PATH
     collection_name: str = "research_papers"
     log_path: str = "query_log.jsonl"
 
@@ -75,14 +85,14 @@ class RAGQueryRunner:
     Encapsulates the RAG query lifecycle: execution, metrics, and telemetry.
 
     This class coordinates the multi-stage hybrid retrieval pipeline, including
-    vector and BM25 search, Reciprocal Rank Fusion (RRF), and post-processing steps 
-    like MMR diversity filtering and LLM-based reranking. It is designed to provide 
-    high-precision answers from academic markdown libraries while strictly tracking 
+    vector and BM25 search, Reciprocal Rank Fusion (RRF), and post-processing steps
+    like MMR diversity filtering and LLM-based reranking. It is designed to provide
+    high-precision answers from academic markdown libraries while strictly tracking
     performance and financial costs.
 
-    The runner integrates thread-local token capturing to ensure that the token usage 
-    from all pipeline stages—including expensive reranking steps—is accurately 
-    summed and logged. It also supports metadata-based filtering and Langfuse 
+    The runner integrates thread-local token capturing to ensure that the token usage
+    from all pipeline stages—including expensive reranking steps—is accurately
+    summed and logged. It also supports metadata-based filtering and Langfuse
     instrumentation for deep observability.
 
     Methods:
@@ -122,19 +132,20 @@ class RAGQueryRunner:
             index=index,
             similarity_top_k=self.config.similarity_top_k,
         )
-        
+
         retrievers = [cast(BaseRetriever, vector_retriever), cast(BaseRetriever, bm25_retriever)]
 
         # Property Graph Retriever
         if os.path.exists(self.config.graph_path) and os.listdir(self.config.graph_path):
             try:
-                pg_storage_context = StorageContext.from_defaults(persist_dir=self.config.graph_path)
+                pg_storage_context = StorageContext.from_defaults(
+                    persist_dir=self.config.graph_path
+                )
                 pg_index = cast(PropertyGraphIndex, load_index_from_storage(pg_storage_context))
-                
+
                 # Include sub_retrievers if possible, or just default as_retriever
                 pg_retriever = pg_index.as_retriever(
-                    include_text=True, 
-                    similarity_top_k=self.config.similarity_top_k
+                    include_text=True, similarity_top_k=self.config.similarity_top_k
                 )
                 retrievers.append(cast(BaseRetriever, pg_retriever))
                 log.info("Successfully loaded PropertyGraphIndex and added its retriever.")
@@ -222,11 +233,14 @@ class RAGQueryRunner:
             docs_retrieved=unique_docs,
             top_similarity=max(similarity_scores) if similarity_scores else 0.0,
             mean_similarity=(
-                sum(similarity_scores) / len(similarity_scores)
-                if similarity_scores else 0.0
+                sum(similarity_scores) / len(similarity_scores) if similarity_scores else 0.0
             ),
-            p10_similarity=float(np.percentile(similarity_scores, 10)) if similarity_scores else 0.0,
-            p90_similarity=float(np.percentile(similarity_scores, 90)) if similarity_scores else 0.0,
+            p10_similarity=float(np.percentile(similarity_scores, 10))
+            if similarity_scores
+            else 0.0,
+            p90_similarity=float(np.percentile(similarity_scores, 90))
+            if similarity_scores
+            else 0.0,
         )
 
         # ── Persistent Local Storage ─────────────────────────────────────────
@@ -272,6 +286,7 @@ class RAGQueryRunner:
                         value=value,
                         data_type="NUMERIC",
                     )
+
         _do_post()
 
     def _append_to_local_log(self, metrics: QueryMetrics, answer: str) -> None:
@@ -369,10 +384,10 @@ def main() -> None:
 
     # see README.md for usage examples, including complex filter construction
     parser = argparse.ArgumentParser(description="Query the Zettlr MD-RAG Library")
-    parser.add_argument("question",      type=str, help="The question to ask.")
-    parser.add_argument("--year",        type=int, help="Filter papers by year.")
-    parser.add_argument("--category",    type=str, help="Filter by folder category.")
-    parser.add_argument("--tag",         type=str, help="Filter by specific tag.")
+    parser.add_argument("question", type=str, help="The question to ask.")
+    parser.add_argument("--year", type=int, help="Filter papers by year.")
+    parser.add_argument("--category", type=str, help="Filter by folder category.")
+    parser.add_argument("--tag", type=str, help="Filter by specific tag.")
     parser.add_argument(
         "--filter-json",
         type=str,
@@ -384,7 +399,7 @@ def main() -> None:
         help="Optional run ID for reliability testing.",
         default=None,
     )
-    parser.add_argument("--no-metrics",  action="store_true", help="Suppress metrics output.")
+    parser.add_argument("--no-metrics", action="store_true", help="Suppress metrics output.")
     parser.add_argument("--show-sources", action="store_true", help="Display retrieved nodes.")
 
     args = parser.parse_args()

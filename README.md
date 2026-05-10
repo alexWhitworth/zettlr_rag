@@ -228,14 +228,3 @@ To run all tests:
 ```bash
 uv run pytest
 ```
-he tests are designed to be isolated and use temporary 
-directories for ChromaDB and metadata to avoid impacting your production data.
-
-Test coverage is currently ~85%.
-
-### Running Tests
-To run all tests:
-
-```bash
-uv run pytest
-```

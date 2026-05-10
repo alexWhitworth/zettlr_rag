@@ -2,7 +2,6 @@
 Custom node postprocessors for the Zettlr RAG pipeline.
 """
 
-
 import numpy as np
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import NodeWithScore, QueryBundle
@@ -15,6 +14,7 @@ class MMRPostprocessor(BaseNodePostprocessor):
 
     λ: 0 = pure diversity, 1 = pure relevance.
     """
+
     top_n: int = 12
     mmr_threshold: float = 0.6
 
@@ -33,7 +33,7 @@ class MMRPostprocessor(BaseNodePostprocessor):
         # Filter out nodes without embeddings
         nodes_with_embs = [n for n in nodes if n.node.embedding is not None]
         if not nodes_with_embs:
-            return nodes[:self.top_n]
+            return nodes[: self.top_n]
 
         embeddings = np.array([n.node.embedding for n in nodes_with_embs])
 
@@ -59,7 +59,9 @@ class MMRPostprocessor(BaseNodePostprocessor):
                     relevance = nodes_with_embs[i].score or 0.0
                     # Redundancy is the max similarity to any already selected node
                     redundancy = float(np.max(embeddings[i] @ selected_embs.T))
-                    mmr_score = (self.mmr_threshold * relevance) - ((1 - self.mmr_threshold) * redundancy)
+                    mmr_score = (self.mmr_threshold * relevance) - (
+                        (1 - self.mmr_threshold) * redundancy
+                    )
 
                     if mmr_score > best_score:
                         best, best_score = i, mmr_score

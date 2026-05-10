@@ -12,6 +12,7 @@ def test_load_query_log_file_not_found(tmp_path, caplog):
     assert df.empty
     assert "Query log not found" in caplog.text
 
+
 def test_load_query_log_empty_file(tmp_path):
     empty_file = tmp_path / "empty.jsonl"
     empty_file.write_text("")
@@ -22,6 +23,7 @@ def test_load_query_log_empty_file(tmp_path):
         df = load_query_log(str(empty_file))
         assert df.empty
 
+
 def test_load_query_log_valid(tmp_path):
     log_file = tmp_path / "valid.jsonl"
     log_file.write_text('{"timestamp": "2024-01-01T00:00:00Z", "query": "test"}\n')
@@ -31,12 +33,14 @@ def test_load_query_log_valid(tmp_path):
     assert len(df) == 1
     assert pd.api.types.is_datetime64tz_dtype(df["timestamp"])
 
+
 @patch("langfuse.get_client")
 @patch("dotenv.load_dotenv")
 def test_load_langfuse_traces_connection_failure(mock_dotenv, mock_get_client):
     mock_get_client.side_effect = Exception("Connection Refused")
     df = load_langfuse_traces()
     assert df.empty
+
 
 @patch("langfuse.get_client")
 @patch("dotenv.load_dotenv")
@@ -70,6 +74,7 @@ def test_load_langfuse_traces_full_flow(mock_dotenv, mock_get_client):
     assert df.iloc[0]["accuracy"] == 0.9
     assert df.iloc[0]["trace_id"] == "trace_1"
     assert pd.api.types.is_datetime64tz_dtype(df["timestamp"])
+
 
 @patch("langfuse.get_client")
 @patch("dotenv.load_dotenv")

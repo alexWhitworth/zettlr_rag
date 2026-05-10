@@ -17,15 +17,16 @@ def test_append_to_local_log(tmp_path):
     test_log = tmp_path / "test_query_log.jsonl"
 
     # Setup runner with test config
-    config = RAGQueryConfig(log_path=str(test_log))
+    config = RAGQueryConfig(
+        log_path=str(test_log),
+        graph_path=str(tmp_path / ".graph_index"),
+        chroma_path=str(tmp_path / "chroma_db_academic"),
+        index_persist_dir=str(tmp_path / ".index_metadata"),
+    )
     # Mock engine and telemetry initialization to avoid real API/DB calls
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr("query.setup_settings", lambda: None)
-        mp.setattr("chromadb.PersistentClient", MagicMock())
-        mp.setattr("llama_index.core.VectorStoreIndex.from_vector_store", MagicMock())
-
+        mp.setattr("query.RAGQueryRunner._initialize_engine", MagicMock())
         runner = RAGQueryRunner(config=config)
-
     # Create sample metrics
     metrics = QueryMetrics(
         question="What is shrinkage?",
@@ -40,7 +41,7 @@ def test_append_to_local_log(tmp_path):
         top_similarity=0.9,
         mean_similarity=0.8,
         p10_similarity=0.7,
-        p90_similarity=0.85
+        p90_similarity=0.85,
     )
     answer = "Shrinkage is a statistical technique."
 
@@ -65,16 +66,19 @@ def test_append_to_local_log(tmp_path):
         assert record["p90_similarity"] == metrics.p90_similarity
         assert "timestamp" in record
 
+
 def test_append_to_local_log_multiple_entries(tmp_path):
     test_log = tmp_path / "test_multi_log.jsonl"
-    config = RAGQueryConfig(log_path=str(test_log))
+    config = RAGQueryConfig(
+        log_path=str(test_log),
+        graph_path=str(tmp_path / ".graph_index"),
+        chroma_path=str(tmp_path / "chroma_db_academic"),
+        index_persist_dir=str(tmp_path / ".index_metadata"),
+    )
 
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr("query.setup_settings", lambda: None)
-        mp.setattr("chromadb.PersistentClient", MagicMock())
-        mp.setattr("llama_index.core.VectorStoreIndex.from_vector_store", MagicMock())
+        mp.setattr("query.RAGQueryRunner._initialize_engine", MagicMock())
         runner = RAGQueryRunner(config=config)
-
     metrics = QueryMetrics(question="Q1")
     runner._append_to_local_log(metrics, "A1")
     runner._append_to_local_log(metrics, "A2")

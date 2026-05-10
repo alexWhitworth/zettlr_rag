@@ -1,7 +1,7 @@
 [project]
 name = "zettlr-rag"
-version = "0.6.3"
-description = "RAG for my academic papers library"
+version = "0.8.0"
+description = "RAG or LLM Knowledge for my papers library"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

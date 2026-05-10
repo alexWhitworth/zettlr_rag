@@ -86,21 +86,22 @@ class ReliabilityHarness:
             runner = RAGQueryRunner(config=config)
             response, metrics = runner.query(question)
 
-            results.append({
-                "run":     i,
-                "answer":  str(response),
-                "metrics": metrics,
-            })
+            results.append(
+                {
+                    "run": i,
+                    "answer": str(response),
+                    "metrics": metrics,
+                }
+            )
             msg = (
-                f"  Run {i}/{n_runs}: ${metrics.cost_total_usd:.6f} | "
-                f"{metrics.wall_time_ms:.0f}ms"
+                f"  Run {i}/{n_runs}: ${metrics.cost_total_usd:.6f} | {metrics.wall_time_ms:.0f}ms"
             )
             print(msg, file=sys.stderr)
 
-        costs     = [cast(QueryMetrics, r["metrics"]).cost_total_usd  for r in results]
-        latencies = [cast(QueryMetrics, r["metrics"]).wall_time_ms     for r in results]
-        tokens    = [cast(QueryMetrics, r["metrics"]).total_tokens     for r in results]
-        answers   = [cast(str, r["answer"])                           for r in results]
+        costs = [cast(QueryMetrics, r["metrics"]).cost_total_usd for r in results]
+        latencies = [cast(QueryMetrics, r["metrics"]).wall_time_ms for r in results]
+        tokens = [cast(QueryMetrics, r["metrics"]).total_tokens for r in results]
+        answers = [cast(str, r["answer"]) for r in results]
 
         def cv(values: list[float] | list[int]) -> float:
             """Coefficient of variation."""
@@ -109,29 +110,29 @@ class ReliabilityHarness:
 
         summary: dict[str, Any] = {
             "question": question,
-            "n_runs":   n_runs,
+            "n_runs": n_runs,
             "cost": {
-                "mean":   round(statistics.mean(costs), 8),
-                "stdev":  round(statistics.stdev(costs), 8) if n_runs > 1 else 0.0,
-                "p10":    round(float(np.percentile(costs, 10)), 8) if n_runs > 0 else 0.0,
-                "p90":    round(float(np.percentile(costs, 90)), 8) if n_runs > 0 else 0.0,
-                "p95":    round(float(np.percentile(costs, 95)), 8) if n_runs > 0 else 0.0,
+                "mean": round(statistics.mean(costs), 8),
+                "stdev": round(statistics.stdev(costs), 8) if n_runs > 1 else 0.0,
+                "p10": round(float(np.percentile(costs, 10)), 8) if n_runs > 0 else 0.0,
+                "p90": round(float(np.percentile(costs, 90)), 8) if n_runs > 0 else 0.0,
+                "p95": round(float(np.percentile(costs, 95)), 8) if n_runs > 0 else 0.0,
                 "cv_pct": round(cv(costs), 2),
             },
             "latency_ms": {
-                "mean":   round(statistics.mean(latencies), 1),
-                "stdev":  round(statistics.stdev(latencies), 1) if n_runs > 1 else 0.0,
-                "p10":    round(float(np.percentile(latencies, 10)), 1) if n_runs > 0 else 0.0,
-                "p90":    round(float(np.percentile(latencies, 90)), 1) if n_runs > 0 else 0.0,
-                "p95":    round(float(np.percentile(latencies, 95)), 1) if n_runs > 0 else 0.0,
+                "mean": round(statistics.mean(latencies), 1),
+                "stdev": round(statistics.stdev(latencies), 1) if n_runs > 1 else 0.0,
+                "p10": round(float(np.percentile(latencies, 10)), 1) if n_runs > 0 else 0.0,
+                "p90": round(float(np.percentile(latencies, 90)), 1) if n_runs > 0 else 0.0,
+                "p95": round(float(np.percentile(latencies, 95)), 1) if n_runs > 0 else 0.0,
                 "cv_pct": round(cv(latencies), 2),
             },
             "tokens": {
-                "mean":   round(statistics.mean(tokens), 1),
-                "stdev":  round(statistics.stdev(tokens), 1) if n_runs > 1 else 0.0,
-                "p10":    round(float(np.percentile(tokens, 10)), 1) if n_runs > 0 else 0.0,
-                "p90":    round(float(np.percentile(tokens, 90)), 1) if n_runs > 0 else 0.0,
-                "p95":    round(float(np.percentile(tokens, 95)), 1) if n_runs > 0 else 0.0,
+                "mean": round(statistics.mean(tokens), 1),
+                "stdev": round(statistics.stdev(tokens), 1) if n_runs > 1 else 0.0,
+                "p10": round(float(np.percentile(tokens, 10)), 1) if n_runs > 0 else 0.0,
+                "p90": round(float(np.percentile(tokens, 90)), 1) if n_runs > 0 else 0.0,
+                "p95": round(float(np.percentile(tokens, 95)), 1) if n_runs > 0 else 0.0,
                 "cv_pct": round(cv(tokens), 2),
             },
         }
@@ -160,9 +161,9 @@ class ReliabilityHarness:
 
     def print(self, summary: dict[str, Any]) -> None:
         """Print summary report to stdout."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"RELIABILITY REPORT: {summary['question'][:60]}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"Runs: {summary['n_runs']}")
         print("\nCost (USD):")
         print(f"  Mean:  ${summary['cost']['mean']:.6f}")
@@ -192,19 +193,19 @@ class ReliabilityHarness:
             print(f"  Semantic Entropy (H_sem): {em['semantic_entropy']:.4f}")
 
         print(f"\n{summary['reliability_verdict']}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
 
 def main() -> None:
     import nest_asyncio
+
     nest_asyncio.apply()
 
     parser = argparse.ArgumentParser(description="RAG Reliability Harness")
     parser.add_argument("question", type=str, nargs="?", help="Single question to test.")
     parser.add_argument("--questions-file", type=str, help="Path to .txt file.")
     parser.add_argument("--runs", type=int, default=5, help="Number of runs.")
-    parser.add_argument("--semantic-entropy", action="store_true",
-                        help="Enable semantic entropy.")
+    parser.add_argument("--semantic-entropy", action="store_true", help="Enable semantic entropy.")
     args = parser.parse_args()
 
     instrumented = init_telemetry()
@@ -218,10 +219,7 @@ def main() -> None:
     else:
         parser.error("Provide a question or --questions-file")
 
-    harness = ReliabilityHarness(
-        instrumented=instrumented,
-        semantic_entropy=args.semantic_entropy
-    )
+    harness = ReliabilityHarness(instrumented=instrumented, semantic_entropy=args.semantic_entropy)
 
     for question in questions:
         summary = harness.run_test(question, n_runs=args.runs)

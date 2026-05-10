@@ -69,6 +69,7 @@ async def test_main_async_survey(temp_chroma_db, temp_metadata_path, tmp_path):
         assert os.path.exists(temp_metadata_path)
         assert len(os.listdir(temp_metadata_path)) > 0
 
+
 def test_sanitize_metadata():
     raw = {
         "str": "val",
@@ -77,7 +78,7 @@ def test_sanitize_metadata():
         "none": None,
         "list": ["a", "b"],
         "dict": {"k": "v"},
-        "other": object()
+        "other": object(),
     }
     sanitized = sanitize_metadata(raw)
     assert sanitized["str"] == "val"
@@ -87,6 +88,7 @@ def test_sanitize_metadata():
     assert sanitized["list"] == "a, b"
     assert sanitized["dict"] == json.dumps({"k": "v"})
     assert isinstance(sanitized["other"], str)
+
 
 def test_token_capturing_gemini_store():
     # Reset store
@@ -117,8 +119,9 @@ def test_token_capturing_gemini_store():
 
     llm._store(resp2)
     usage = get_last_token_usage()
-    assert usage.input_tokens == 110 # accumulated
+    assert usage.input_tokens == 110  # accumulated
     assert usage.output_tokens == 220
+
 
 @patch("zettlr_rag.rag_setup.load_dotenv")
 @patch("os.getenv")
@@ -126,6 +129,7 @@ def test_setup_settings_error(mock_getenv, mock_dotenv):
     mock_getenv.return_value = None
     with pytest.raises(ValueError, match="API Key not found"):
         setup_settings()
+
 
 @patch("zettlr_rag.rag_setup.load_dotenv")
 @patch("os.getenv")
@@ -135,7 +139,7 @@ def test_setup_settings_success(mock_getenv, mock_dotenv):
 
     with (
         patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_gemini,
-        patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed
+        patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed,
     ):
         mock_gemini.return_value = MockLLM()
         mock_embed.return_value = MockEmbedding(embed_dim=768)

@@ -19,9 +19,9 @@ from llama_index.core import (
     VectorStoreIndex,
     load_index_from_storage,
 )
+from llama_index.core.base.llms.types import ChatMessage, ChatResponse, CompletionResponse
 from llama_index.core.graph_stores import SimplePropertyGraphStore
 from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
-from llama_index.core.base.llms.types import ChatMessage, ChatResponse, CompletionResponse
 from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.schema import (
     MetadataMode,
@@ -32,7 +32,15 @@ from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from zettlr_rag.consts import BIBTEX_PATTERN, EMBEDDING_MODEL_NAME, MODEL_NAME, SYSTEM_PROMPT
+from zettlr_rag.consts import (
+    BIBTEX_PATTERN,
+    CHROMA_PATH,
+    EMBEDDING_MODEL_NAME,
+    GRAPH_INDEX_PATH,
+    METADATA_PATH,
+    MODEL_NAME,
+    SYSTEM_PROMPT,
+)
 from zettlr_rag.metrics import TokenUsage
 
 # Configure logging
@@ -41,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 
 _usage_store = threading.local()
+
 
 def reset_token_usage() -> None:
     """Resets the accumulated token usage for the current thread."""
@@ -56,11 +65,11 @@ class TokenCapturingGemini(GoogleGenAI):
     """
     Wraps GoogleGenAI to capture and accumulate usage_metadata.
 
-    This custom wrapper is required due to a bug in llama_index 
-    (https://github.com/run-llama/llama_index/issues/19293) where token usage metadata is 
-    discarded during the query engine pipeline. 
-    
-    This class intercepts the response and accumulates tokens across multiple calls (e.g., 
+    This custom wrapper is required due to a bug in llama_index
+    (https://github.com/run-llama/llama_index/issues/19293) where token usage metadata is
+    discarded during the query engine pipeline.
+
+    This class intercepts the response and accumulates tokens across multiple calls (e.g.,
     LLMRerank + Synthesis) into thread-local storage before llama_index drops the data.
     """
 
@@ -106,7 +115,9 @@ class TokenCapturingGemini(GoogleGenAI):
                 if meta:
                     current_usage.input_tokens += getattr(meta, "prompt_token_count", 0) or 0
                     current_usage.output_tokens += getattr(meta, "candidates_token_count", 0) or 0
-                    current_usage.cache_tokens += getattr(meta, "cached_content_token_count", 0) or 0
+                    current_usage.cache_tokens += (
+                        getattr(meta, "cached_content_token_count", 0) or 0
+                    )
                     return
 
             # Try additional_kwargs
@@ -218,13 +229,13 @@ class AcademicRAGSync:
     """
     Manages the synchronization of local academic markdown files with a Vector Index.
 
-    This class provides "Smart Sync" logic to efficiently maintain a ChromaDB 
-    vector store alongside a LlamaIndex document store. By analyzing file hashes 
-    and existing index metadata, it identifies new, modified, moved, or deleted 
-    files on disk. This prevents redundant embedding API calls and ensures that 
+    This class provides "Smart Sync" logic to efficiently maintain a ChromaDB
+    vector store alongside a LlamaIndex document store. By analyzing file hashes
+    and existing index metadata, it identifies new, modified, moved, or deleted
+    files on disk. This prevents redundant embedding API calls and ensures that
     the vector store accurately reflects the current state of the markdown library.
 
-    The synchronization pipeline handles embedding extraction, batching, metadata 
+    The synchronization pipeline handles embedding extraction, batching, metadata
     sanitization, and persistent storage of the updated index state.
 
     Methods:
@@ -240,9 +251,9 @@ class AcademicRAGSync:
     def __init__(
         self,
         base_path: str,
-        chroma_path: str = "./chroma_db_academic",
-        metadata_path: str = "./.index_metadata",
-        graph_path: str = "./.graph_index",
+        chroma_path: str = CHROMA_PATH,
+        metadata_path: str = METADATA_PATH,
+        graph_path: str = GRAPH_INDEX_PATH,
         checkpoint_batch_size: int = 50,
     ):
         self.base_path = base_path
@@ -277,7 +288,7 @@ class AcademicRAGSync:
             logger.info("Initializing new index metadata...")
             storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
             self.index = VectorStoreIndex([], storage_context=storage_context)
-            
+
         self._initialize_graph()
 
     def _initialize_graph(self) -> None:
@@ -285,25 +296,28 @@ class AcademicRAGSync:
         if os.path.exists(self.graph_path) and os.listdir(self.graph_path):
             logger.info("Loading existing property graph index...")
             storage_context = StorageContext.from_defaults(persist_dir=self.graph_path)
-            self.pg_index = cast(
-                PropertyGraphIndex, load_index_from_storage(storage_context)
-            )
+            self.pg_index = cast(PropertyGraphIndex, load_index_from_storage(storage_context))
         else:
             from typing import Literal
+
             logger.info("Initializing new property graph index...")
             kg_extractor = SchemaLLMPathExtractor(
                 llm=Settings.llm,
                 possible_entities=Literal[
-                    "Document", "Author", "Method", "Dataset", 
-                    "Metric", "Concept", "Organization"
+                    "Document", "Author", "Method", "Dataset", "Metric", "Concept", "Organization"
                 ],
                 possible_relations=Literal[
-                    "AUTHORED_BY", "USES_METHOD", "BENCHMARKED_ON", 
-                    "IMPROVES_UPON", "DEFINES", "REPORTS", "AFFILIATED_WITH"
+                    "AUTHORED_BY",
+                    "USES_METHOD",
+                    "BENCHMARKED_ON",
+                    "IMPROVES_UPON",
+                    "DEFINES",
+                    "REPORTS",
+                    "AFFILIATED_WITH",
                 ],
                 strict=True,
             )
-            
+
             # Link it to the existing docstore so nodes map correctly
             if self.index and self.index.storage_context:
                 storage_context = StorageContext.from_defaults(
@@ -331,22 +345,22 @@ class AcademicRAGSync:
         existing_hashes = {
             doc_id: self.index.docstore.get_document_hash(doc_id) for doc_id in existing_doc_ids
         }
-        
+
         # Determine if we need to backfill the graph
         is_graph_empty = False
         if self.pg_index and self.pg_index.property_graph_store:
             graph_nodes = getattr(self.pg_index.property_graph_store, "graph", None)
             if graph_nodes and not graph_nodes.nodes:
                 is_graph_empty = True
-                
-        # If the docstore has entries but the graph is completely empty, 
+
+        # If the docstore has entries but the graph is completely empty,
         # force re-indexing of all existing valid documents to backfill the graph.
         force_reindex = is_graph_empty and len(existing_hashes) > 0
 
         disk_doc_ids = {doc.id_ for doc in documents}
         stale_doc_ids = [doc_id for doc_id in existing_doc_ids if doc_id not in disk_doc_ids]
         new_docs = [doc for doc in documents if doc.id_ not in existing_hashes]
-        
+
         if force_reindex:
             logger.info("Graph is empty but docstore is populated. Forcing full graph backfill.")
             # Treat all disk documents that aren't stale as "changed" to force re-extraction
@@ -430,13 +444,16 @@ class AcademicRAGSync:
                         meta = dict(res["metadatas"][0])
                         meta.update(n_doc.metadata)
                         self.chroma_collection.update(ids=[node.node_id], metadatas=[meta])
-                        
+
                     # Update metadata in Property Graph
                     if self.pg_index and self.pg_index.property_graph_store:
                         # Graph nodes share the same node_id as docstore nodes
-                        graph_store = cast(SimplePropertyGraphStore, self.pg_index.property_graph_store)
+                        graph_store = cast(
+                            SimplePropertyGraphStore, self.pg_index.property_graph_store
+                        )
                         if hasattr(graph_store, "get"):
-                            # LlamaIndex SimplePropertyGraphStore often exposes a get method or internal dict
+                            # LlamaIndex SimplePropertyGraphStore often exposes a get method or
+                            # internal dict
                             try:
                                 # We try to find nodes that correspond to this chunk
                                 # Often the text node is stored directly
@@ -444,7 +461,9 @@ class AcademicRAGSync:
                                     g_node = graph_store.graph.nodes[node.node_id]
                                     g_node.properties.update(n_doc.metadata)
                             except Exception as e:
-                                logger.warning(f"Could not update graph node metadata for {node.node_id}: {e}")
+                                logger.warning(
+                                    f"Could not update graph node metadata for {node.node_id}: {e}"
+                                )
 
                 # Cleanup and Transfer in Docstore
                 try:
@@ -468,7 +487,7 @@ class AcademicRAGSync:
         self.index.storage_context.persist(persist_dir=self.metadata_path)
         if self.pg_index:
             self.pg_index.storage_context.persist(persist_dir=self.graph_path)
-            
+
         return failed_moves
 
     def execute_deletions(self, doc_ids: list[str], is_stale: bool = True) -> None:
@@ -479,18 +498,18 @@ class AcademicRAGSync:
         for doc_id in doc_ids:
             try:
                 self.index.delete_ref_doc(doc_id, delete_from_docstore=True)
-                
+
                 if self.pg_index:
                     try:
                         self.pg_index.delete_ref_doc(doc_id)
                     except Exception as pg_e:
                         logger.warning(f"Could not delete {doc_id} from property graph: {pg_e}")
-                        
+
                 if is_stale:
                     logger.info(f"🗑️ Pruned stale document: {doc_id}")
             except Exception as e:
                 logger.warning(f"Could not delete {doc_id}: {e}")
-                
+
         if self.pg_index:
             self.pg_index.storage_context.persist(persist_dir=self.graph_path)
 
@@ -515,10 +534,10 @@ class AcademicRAGSync:
 
             nodes = parser.get_nodes_from_documents(batch_docs)
             nodes = [
-                n for n in nodes
+                n
+                for n in nodes
                 # Filter short nodes and raw BibTeX blocks
-                if len(n.get_content().strip()) >= 20
-                and not BIBTEX_PATTERN.search(n.get_content())
+                if len(n.get_content().strip()) >= 20 and not BIBTEX_PATTERN.search(n.get_content())
             ]
 
             if not nodes:
@@ -541,7 +560,8 @@ class AcademicRAGSync:
             # 1. Write vectors to ChromaDB
             self.vector_store.add(nodes)
 
-            # 2. Register source docs first — docstore uses SOURCE relationship to populate ref_doc_info
+            # 2. Register source docs first — docstore uses SOURCE relationship to populate
+            # ref_doc_info
             for doc in batch_docs:
                 self.index.docstore.add_documents([doc], allow_update=True)
                 self.index.docstore.set_document_hash(doc.id_, doc.hash)
@@ -599,9 +619,7 @@ class AcademicRAGSync:
             similarity_top_k=20,
             system_prompt=SYSTEM_PROMPT,
         )
-        query_text = (
-            "Summarize how shrinkage can be used to improve experiment estimates and their precision."
-        )
+        query_text = "Summarize how shrinkage can be used to improve experiment estimates and their precision."
         response = await query_engine.aquery(query_text)
         print(f"\n# Query Response\n{response}")
 
@@ -640,7 +658,7 @@ def main() -> None:
         sys.exit(1)
 
     # verification off: process is stable
-    asyncio.run(main_async(base_path=path, run_verification=False))
+    asyncio.run(main_async(base_path=path, run_verification=True))
 
 
 if __name__ == "__main__":

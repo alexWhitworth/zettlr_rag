@@ -64,9 +64,7 @@ def test_calculate_cost() -> None:
     usage = TokenUsage(input_tokens=1000, output_tokens=500, cache_tokens=100)
 
     # Mock pricing table
-    pricing = {
-        "model-x": {"input": 0.01, "output": 0.02, "cache": 0.005}
-    }
+    pricing = {"model-x": {"input": 0.01, "output": 0.02, "cache": 0.005}}
 
     # Known model
     ci, co, cc, ct = calculate_cost(usage, "model-x", pricing)
@@ -100,7 +98,7 @@ def test_extract_token_usage_path_1() -> None:
     response.metadata = {
         "prompt_token_count": 10,
         "candidates_token_count": 20,
-        "cached_content_token_count": 5
+        "cached_content_token_count": 5,
     }
     usage = extract_token_usage_from_response(response)
     assert usage.input_tokens == 10
@@ -111,12 +109,7 @@ def test_extract_token_usage_path_1() -> None:
 def test_extract_token_usage_path_3() -> None:
     # Path 3: token_usage dict
     response = MagicMock()
-    response.metadata = {
-        "token_usage": {
-            "prompt_tokens": 15,
-            "completion_tokens": 25
-        }
-    }
+    response.metadata = {"token_usage": {"prompt_tokens": 15, "completion_tokens": 25}}
     usage = extract_token_usage_from_response(response)
     assert usage.input_tokens == 15
     assert usage.output_tokens == 25
@@ -151,7 +144,7 @@ def test_query_metrics_to_langfuse_scores() -> None:
         top_similarity=0.95,
         mean_similarity=0.8,
         p10_similarity=0.6,
-        p90_similarity=0.9
+        p90_similarity=0.9,
     )
 
     scores = metrics.to_langfuse_scores()

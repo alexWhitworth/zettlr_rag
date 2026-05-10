@@ -54,6 +54,7 @@ def load_langfuse_traces() -> pd.DataFrame:
 
     try:
         from langfuse import get_client
+
         lf = get_client()
     except Exception as exc:
         log.error(f"Could not connect to Langfuse: {exc}")
@@ -63,15 +64,17 @@ def load_langfuse_traces() -> pd.DataFrame:
     traces = lf.fetch_traces().data  # type: ignore
     trace_rows = []
     for t in traces:
-        trace_rows.append({
-            "trace_id":   t.id,
-            "question":   t.input,
-            "answer":     t.output,
-            "model":      (t.metadata or {}).get("model"),
-            "run_id":     (t.metadata or {}).get("run_id"),
-            "timestamp":  t.timestamp,
-            "latency_ms": t.latency,
-        })
+        trace_rows.append(
+            {
+                "trace_id": t.id,
+                "question": t.input,
+                "answer": t.output,
+                "model": (t.metadata or {}).get("model"),
+                "run_id": (t.metadata or {}).get("run_id"),
+                "timestamp": t.timestamp,
+                "latency_ms": t.latency,
+            }
+        )
     traces_df = pd.DataFrame(trace_rows)
 
     if traces_df.empty:
@@ -79,10 +82,7 @@ def load_langfuse_traces() -> pd.DataFrame:
 
     # ── Fetch scores and pivot wide ───────────────────────────────────────────
     scores = lf.fetch_scores().data  # type: ignore
-    score_rows = [
-        {"trace_id": s.trace_id, "metric": s.name, "value": s.value}
-        for s in scores
-    ]
+    score_rows = [{"trace_id": s.trace_id, "metric": s.name, "value": s.value} for s in scores]
     scores_df = pd.DataFrame(score_rows)
 
     if not scores_df.empty:

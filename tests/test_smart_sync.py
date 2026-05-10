@@ -1,7 +1,7 @@
-import chromadb
 import os
 from unittest.mock import patch
 
+import chromadb
 import pytest
 from llama_index.core.embeddings.mock_embed_model import MockEmbedding
 from llama_index.core.llms.mock import MockLLM
@@ -50,10 +50,10 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         mock_embed_class.return_value = MockEmbedding(embed_dim=768)
 
         sync_manager = AcademicRAGSync(
-            base_path=lib_path, 
-            chroma_path=chroma_path, 
+            base_path=lib_path,
+            chroma_path=chroma_path,
             metadata_path=metadata_path,
-            graph_path=graph_path
+            graph_path=graph_path,
         )
 
         # --- PHASE 1: Initial Ingestion ---
@@ -81,8 +81,9 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
 
         await sync_manager.run_sync(run_verification=False)
         captured = capsys.readouterr()
-        # Because we re-initialize the graph on sync without persisting it globally between test phases,
-        # it registers as empty and triggers a backfill of the initial papers + the modified paper + the new paper
+        # Because we re-initialize the graph on sync without persisting it globally between test
+        # phases, it registers as empty and triggers a backfill of the initial papers + the
+        # modified paper + the new paper
         assert "3 modified files to re-embed" in captured.out
 
         nodes_after_phase_2 = len(sync_manager.pg_index.property_graph_store.graph.nodes)
@@ -106,10 +107,9 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         os.remove(p3_path)
         await sync_manager.run_sync(run_verification=False)
         captured = capsys.readouterr()
-        # Due to force_reindex from an empty graph instance, all documents are re-indexed. 
+        # Due to force_reindex from an empty graph instance, all documents are re-indexed.
         # The stale document is simply not included in the re-index.
         assert "1 stale files to prune" not in captured.out
-        nodes_after_phase_4 = len(sync_manager.pg_index.property_graph_store.graph.nodes)
 
         # --- PHASE 5: Root Folder Rename ---
         # Simulate moving Zettlr-Papers -> Zettlr/Papers
@@ -119,16 +119,20 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         # Update sync manager to point to new path
         sync_manager.base_path = new_lib_path
 
-        chroma_before = len(set(
-            chromadb.PersistentClient(path=chroma_path)
-            .get_collection("research_papers")
-            .get()["ids"]
-        ))
-        
+        chroma_before = len(
+            set(
+                chromadb.PersistentClient(path=chroma_path)
+                .get_collection("research_papers")
+                .get()["ids"]
+            )
+        )
+
         # Capture metadata before move
         if sync_manager.pg_index.property_graph_store.graph.nodes:
             first_node_id = next(iter(sync_manager.pg_index.property_graph_store.graph.nodes))
-            old_path_metadata = sync_manager.pg_index.property_graph_store.graph.nodes[first_node_id].properties.get('file_path')
+            old_path_metadata = sync_manager.pg_index.property_graph_store.graph.nodes[
+                first_node_id
+            ].properties.get("file_path")
         else:
             first_node_id = None
             old_path_metadata = None
@@ -136,40 +140,43 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         await sync_manager.run_sync(run_verification=False)
         captured = capsys.readouterr()
 
-        chroma_after = len(set(
-            chromadb.PersistentClient(path=chroma_path)
-            .get_collection("research_papers")
-            .get()["ids"]
-        ))
+        chroma_after = len(
+            set(
+                chromadb.PersistentClient(path=chroma_path)
+                .get_collection("research_papers")
+                .get()["ids"]
+            )
+        )
 
         # All docs should be detected as moves, none as new/stale
         assert chroma_after == chroma_before, (
             f"ChromaDB chunks changed during root rename: {chroma_before} -> {chroma_after}"
         )
-        
+
         # Verify metadata actually updated in-place for graph nodes
         if first_node_id:
-            new_path_metadata = sync_manager.pg_index.property_graph_store.graph.nodes[first_node_id].properties.get('file_path')
+            new_path_metadata = sync_manager.pg_index.property_graph_store.graph.nodes[
+                first_node_id
+            ].properties.get("file_path")
             assert old_path_metadata != new_path_metadata
             assert "new_library" in new_path_metadata
-        
+
         # --- PHASE 6: Graph Cold Start with Existing Docstore ---
         # Wipe the graph
         import shutil
+
         shutil.rmtree(graph_path)
-        
+
         # Re-initialize the sync manager to trigger cold start logic
         sync_manager_cold = AcademicRAGSync(
-            base_path=new_lib_path, 
-            chroma_path=chroma_path, 
+            base_path=new_lib_path,
+            chroma_path=chroma_path,
             metadata_path=metadata_path,
-            graph_path=graph_path
+            graph_path=graph_path,
         )
-        
+
         await sync_manager_cold.run_sync(run_verification=False)
         captured = capsys.readouterr()
         # 3 documents exist now (fixture + paper1 + paper2)
-        assert "3 modified files to re-embed" in captured.out 
+        assert "3 modified files to re-embed" in captured.out
         assert "0 new files to embed" in captured.out
-
-

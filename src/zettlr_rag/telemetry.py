@@ -11,6 +11,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
+
 def init_telemetry() -> bool:
     """
     Initialize Langfuse + OpenInference instrumentation for LlamaIndex.
@@ -25,7 +26,7 @@ def init_telemetry() -> bool:
     """
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")
-    host       = os.getenv("LANGFUSE_HOST", "http://localhost:3000")
+    host = os.getenv("LANGFUSE_HOST", "http://localhost:3000")
 
     if not public_key or not secret_key:
         log.warning(
@@ -69,6 +70,7 @@ def get_langfuse_client() -> Any:
     """
     try:
         from langfuse import get_client
+
         return get_client()
     except Exception:
         return None
