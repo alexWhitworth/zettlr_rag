@@ -1,12 +1,19 @@
-# Zettlr RAG (MD-RAG)
+# Zettlr RAG (MD-RAG) + LLM Knowledge Base
 
 A specialized Retrieval-Augmented Generation (RAG) system for personal note libraries. This system 
 implements **MD-RAG** (Metadata RAG), preserving and utilizing YAML frontmatter from Zettlr markdown 
 files for high-precision scientific retrieval.
 
-It can be thought of as the "fancy RAG" that [Karpathy](https://x.com/karpathy/status/2039805659525644595)
-notes that he doesn't need for his ~100 file LLM knowledge base. My implementation was fully evaluated
-with ~700 academic 
+It can equivalently be thought of as an "LLM Knowledge Base" [Karpathy](https://x.com/karpathy/status/2039805659525644595),
+though technically it is the "fancy RAG" that Karpathys states he doesn't need for his ~100 
+file LLM knowledge base. 
+
+The implementation was fully evaluated with ~700 academic papers vs [Consensus AI](https://consensus.app/) 
+(SotA Academic RAG).
+    - **tl;dr:** While I can't compete with Consensus AI's 200M+ paper breadth, my system achieved 
+    *45% parity* on deep synthesis queries. 
+        - _See `evals/eval_results.md` for the full details._
+
 
 ## Installation
 
@@ -32,17 +39,19 @@ raw dumps of [Kindle highlighting](https://read.amazon.com/notebook). I designed
 The system utilizes a multi-stage hybrid retrieval pipeline to ensure high precision and diversity
 in the context provided to the LLM:
 
-1.  **Hybrid Retrieval**: Combines semantic search (**Vector**) with keyword-based search (**BM25**).
-2.  **Fusion**: Uses **Reciprocal Rank Fusion (RRF)** with `reciprocal_rerank` mode to merge and 
-normalize results from different retrieval methods.
-3.  **Refinement Pipeline**:
+1.  **Hybrid Retrieval**: Combines semantic search (**Vector**), keyword-based search (**BM25**), 
+and relational triplet search (**Property Graph**).
+2.  **Property Graph Extraction**: During ingestion, a `SchemaLLMPathExtractor` processes the nodes 
+to build an academic knowledge graph based on defined entity relationships (e.g. `Paper` `USES_METHOD` 
+`Method`). This graph runs parallel to the vector store to ground relationships.
+3.  **Fusion**: Uses **Reciprocal Rank Fusion (RRF)** with `reciprocal_rerank` mode to merge and 
+normalize results from the Vector, BM25, and Graph retrievers.
+4.  **Refinement Pipeline**:
     *   **MMR (Maximum Marginal Relevance)**: Reranks for diversity to avoid redundant information
     in the context window.
     *   **LLM Reranking**: Uses the LLM to perform a final precision-based reranking of the top nodes.
     *   **Long Context Reordering**: Reorders nodes to combat the "lost in the middle" effect, 
     placing most relevant information at the start and end of the prompt.
-
-- **TODO:** _See `evals/eval_results.md`_
 
 ### Tech Stack
 - **LLM**: Gemini 3 Flash Preview (`gemini-3-flash-preview`)
@@ -52,9 +61,11 @@ normalize results from different retrieval methods.
 
 ### Implementation Details
 - **Structural Parsing**: U ses `MarkdownNodeParser` to preserve headers and logical sections.
-- **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing double-indexing.
+- **Smart Sync**: Uses a persistent Document Store to track file hashes, preventing 
+double-indexing. It handles file moves by applying metadata updates in-place to both the Vector 
+and Graph stores, bypassing expensive LLM re-extractions.
 - **Rate Limit Optimized**: Implements exponential backoff and batch-size control (1 node/request).
-- **Persistent Storage**: Database stored in `./chroma_db_academic`.
+- **Persistent Storage**: Database stored in `./chroma_db_academic` and `./.graph_index`.
 
 ### Scientific Persona & Formatting
 
@@ -207,6 +218,17 @@ The system automatically maps your YAML header to searchable metadata.
 ## Testing
 
 The project uses `pytest` for testing. The tests are designed to be isolated and use temporary 
+directories for ChromaDB and metadata to avoid impacting your production data.
+
+Test coverage is currently ~85%.
+
+### Running Tests
+To run all tests:
+
+```bash
+uv run pytest
+```
+he tests are designed to be isolated and use temporary 
 directories for ChromaDB and metadata to avoid impacting your production data.
 
 Test coverage is currently ~85%.

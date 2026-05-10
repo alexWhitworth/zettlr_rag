@@ -11,6 +11,7 @@ uv.lock
 # Do not commit binary stores or metadata
 chroma_db_academic/
 .index_metadata/
+.graph_index/
 
 # Generic data/output folders
 data/

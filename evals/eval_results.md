@@ -1,5 +1,9 @@
 ## Evaluation Results
 
+**Date: May 7, 2026**
+**Note: This evaluation was done before `PropertyGraphIndex` and retrieval were added to the library.**
+  - Added May 10, 2026
+
 ### My Corpus Stats:
 
 It is important to note that my library is quite limited in size and scope. This places an upper 
@@ -106,8 +110,10 @@ I used documented notes instead of paper and pen.
 
 I am now extending my RAG to include these additional sources.
 
-- **What is missing?** The Karpathy idea requires structing the database as a knowledge graph,
-with file links. It also adds linting rules for regular maintenance. I have not implemented either,
-instead using RAG and retrieval instead. 
+- **What is missing?** 
+  1. The Karpathy idea requires a knowledge graph data model. In the original idea, this is 
+  implemented with file links. I will implement as a Property Graph.
+  2. Karpathy also adds linting rules for regular maintenance. This is already achieved by the
+  existing `rag_setup.py` smart-sync.
   - **TODO:** Add `llama_index`'s `PropertyGraphIndex` and PG retrieval for in the existing 
   `QueryFusionRetriever` retriever.

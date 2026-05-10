@@ -73,3 +73,6 @@ GEMINI_CONTEXT_WINDOWS: dict[str, int] = {
 BIBTEX_PATTERN = re.compile(
     r"```bibtex|@(?:book|article|misc|inproceedings|phdthesis|techreport|unpublished)\b"
 )
+
+# ── Paths ────────────────────────────────────────────────────────────────────
+GRAPH_INDEX_PATH = "./.graph_index"

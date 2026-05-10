@@ -122,10 +122,28 @@ class RAGQueryRunner:
             index=index,
             similarity_top_k=self.config.similarity_top_k,
         )
+        
+        retrievers = [cast(BaseRetriever, vector_retriever), cast(BaseRetriever, bm25_retriever)]
+
+        # Property Graph Retriever
+        if os.path.exists(self.config.graph_path) and os.listdir(self.config.graph_path):
+            try:
+                pg_storage_context = StorageContext.from_defaults(persist_dir=self.config.graph_path)
+                pg_index = cast(PropertyGraphIndex, load_index_from_storage(pg_storage_context))
+                
+                # Include sub_retrievers if possible, or just default as_retriever
+                pg_retriever = pg_index.as_retriever(
+                    include_text=True, 
+                    similarity_top_k=self.config.similarity_top_k
+                )
+                retrievers.append(cast(BaseRetriever, pg_retriever))
+                log.info("Successfully loaded PropertyGraphIndex and added its retriever.")
+            except Exception as e:
+                log.warning(f"Failed to load PropertyGraphIndex from {self.config.graph_path}: {e}")
 
         # 2. Fusion
         fusion_retriever = QueryFusionRetriever(
-            [cast(BaseRetriever, vector_retriever), cast(BaseRetriever, bm25_retriever)],
+            retrievers,
             similarity_top_k=self.config.similarity_top_k,
             num_queries=1,  # No query generation
             mode=FUSION_MODES.RECIPROCAL_RANK,

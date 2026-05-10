@@ -12,12 +12,15 @@ from chromadb.api.models.Collection import Collection
 from dotenv import load_dotenv
 from llama_index.core import (
     Document,
+    PropertyGraphIndex,
     Settings,
     SimpleDirectoryReader,
     StorageContext,
     VectorStoreIndex,
     load_index_from_storage,
 )
+from llama_index.core.graph_stores import SimplePropertyGraphStore
+from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
 from llama_index.core.base.llms.types import ChatMessage, ChatResponse, CompletionResponse
 from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.schema import (
@@ -239,16 +242,19 @@ class AcademicRAGSync:
         base_path: str,
         chroma_path: str = "./chroma_db_academic",
         metadata_path: str = "./.index_metadata",
+        graph_path: str = "./.graph_index",
         checkpoint_batch_size: int = 50,
     ):
         self.base_path = base_path
         self.chroma_path = chroma_path
         self.metadata_path = metadata_path
+        self.graph_path = graph_path
         self.checkpoint_batch_size = checkpoint_batch_size
 
         self.index: VectorStoreIndex | None = None
         self.vector_store: ChromaVectorStore | None = None
         self.chroma_collection: Collection | None = None
+        self.pg_index: PropertyGraphIndex | None = None
 
     def initialize(self) -> None:
         """Initialize settings, vector store, and index."""
@@ -271,6 +277,48 @@ class AcademicRAGSync:
             logger.info("Initializing new index metadata...")
             storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
             self.index = VectorStoreIndex([], storage_context=storage_context)
+            
+        self._initialize_graph()
+
+    def _initialize_graph(self) -> None:
+        """Initialize the Property Graph store and index."""
+        if os.path.exists(self.graph_path) and os.listdir(self.graph_path):
+            logger.info("Loading existing property graph index...")
+            storage_context = StorageContext.from_defaults(persist_dir=self.graph_path)
+            self.pg_index = cast(
+                PropertyGraphIndex, load_index_from_storage(storage_context)
+            )
+        else:
+            from typing import Literal
+            logger.info("Initializing new property graph index...")
+            kg_extractor = SchemaLLMPathExtractor(
+                llm=Settings.llm,
+                possible_entities=Literal[
+                    "Document", "Author", "Method", "Dataset", 
+                    "Metric", "Concept", "Organization"
+                ],
+                possible_relations=Literal[
+                    "AUTHORED_BY", "USES_METHOD", "BENCHMARKED_ON", 
+                    "IMPROVES_UPON", "DEFINES", "REPORTS", "AFFILIATED_WITH"
+                ],
+                strict=True,
+            )
+            
+            # Link it to the existing docstore so nodes map correctly
+            if self.index and self.index.storage_context:
+                storage_context = StorageContext.from_defaults(
+                    docstore=self.index.storage_context.docstore
+                )
+            else:
+                storage_context = StorageContext.from_defaults()
+
+            self.pg_index = PropertyGraphIndex(
+                nodes=[],
+                kg_extractors=[kg_extractor],
+                storage_context=storage_context,
+            )
+            os.makedirs(self.graph_path, exist_ok=True)
+            self.pg_index.storage_context.persist(persist_dir=self.graph_path)
 
     def plan_sync(self, documents: list[Document]) -> dict[str, Any]:
         """Analyze disk documents vs index to create a sync plan."""
@@ -283,21 +331,38 @@ class AcademicRAGSync:
         existing_hashes = {
             doc_id: self.index.docstore.get_document_hash(doc_id) for doc_id in existing_doc_ids
         }
+        
+        # Determine if we need to backfill the graph
+        is_graph_empty = False
+        if self.pg_index and self.pg_index.property_graph_store:
+            graph_nodes = getattr(self.pg_index.property_graph_store, "graph", None)
+            if graph_nodes and not graph_nodes.nodes:
+                is_graph_empty = True
+                
+        # If the docstore has entries but the graph is completely empty, 
+        # force re-indexing of all existing valid documents to backfill the graph.
+        force_reindex = is_graph_empty and len(existing_hashes) > 0
 
         disk_doc_ids = {doc.id_ for doc in documents}
         stale_doc_ids = [doc_id for doc_id in existing_doc_ids if doc_id not in disk_doc_ids]
         new_docs = [doc for doc in documents if doc.id_ not in existing_hashes]
-        changed_docs = [
-            doc
-            for doc in documents
-            if doc.id_ in existing_hashes and existing_hashes[doc.id_] != doc.hash
-        ]
+        
+        if force_reindex:
+            logger.info("Graph is empty but docstore is populated. Forcing full graph backfill.")
+            # Treat all disk documents that aren't stale as "changed" to force re-extraction
+            changed_docs = [doc for doc in documents if doc.id_ in existing_hashes]
+        else:
+            changed_docs = [
+                doc
+                for doc in documents
+                if doc.id_ in existing_hashes and existing_hashes[doc.id_] != doc.hash
+            ]
 
         # Move Detection
         docs_to_move: list[tuple[str, Document]] = []
         truly_new_docs = []
 
-        if stale_doc_ids and new_docs:
+        if stale_doc_ids and new_docs and not force_reindex:
             logger.info(f"🔍 Checking {len(stale_doc_ids)} stale entries for potential moves...")
             stale_text_map = {}
             for s_id in stale_doc_ids:
@@ -365,6 +430,21 @@ class AcademicRAGSync:
                         meta = dict(res["metadatas"][0])
                         meta.update(n_doc.metadata)
                         self.chroma_collection.update(ids=[node.node_id], metadatas=[meta])
+                        
+                    # Update metadata in Property Graph
+                    if self.pg_index and self.pg_index.property_graph_store:
+                        # Graph nodes share the same node_id as docstore nodes
+                        graph_store = cast(SimplePropertyGraphStore, self.pg_index.property_graph_store)
+                        if hasattr(graph_store, "get"):
+                            # LlamaIndex SimplePropertyGraphStore often exposes a get method or internal dict
+                            try:
+                                # We try to find nodes that correspond to this chunk
+                                # Often the text node is stored directly
+                                if node.node_id in graph_store.graph.nodes:
+                                    g_node = graph_store.graph.nodes[node.node_id]
+                                    g_node.properties.update(n_doc.metadata)
+                            except Exception as e:
+                                logger.warning(f"Could not update graph node metadata for {node.node_id}: {e}")
 
                 # Cleanup and Transfer in Docstore
                 try:
@@ -386,6 +466,9 @@ class AcademicRAGSync:
                 failed_moves.append(n_doc)
 
         self.index.storage_context.persist(persist_dir=self.metadata_path)
+        if self.pg_index:
+            self.pg_index.storage_context.persist(persist_dir=self.graph_path)
+            
         return failed_moves
 
     def execute_deletions(self, doc_ids: list[str], is_stale: bool = True) -> None:
@@ -396,10 +479,20 @@ class AcademicRAGSync:
         for doc_id in doc_ids:
             try:
                 self.index.delete_ref_doc(doc_id, delete_from_docstore=True)
+                
+                if self.pg_index:
+                    try:
+                        self.pg_index.delete_ref_doc(doc_id)
+                    except Exception as pg_e:
+                        logger.warning(f"Could not delete {doc_id} from property graph: {pg_e}")
+                        
                 if is_stale:
                     logger.info(f"🗑️ Pruned stale document: {doc_id}")
             except Exception as e:
                 logger.warning(f"Could not delete {doc_id}: {e}")
+                
+        if self.pg_index:
+            self.pg_index.storage_context.persist(persist_dir=self.graph_path)
 
     async def index_documents(self, documents: list[Document]) -> int:
         """Batch process and index documents."""
