@@ -70,7 +70,6 @@ def build_graph(
         strict=True,
         num_workers=8,
         max_triplets_per_chunk=10,
-        max_retries=3,
     )
 
     os.makedirs(graph_path, exist_ok=True)
