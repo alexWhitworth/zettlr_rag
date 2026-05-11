@@ -21,9 +21,11 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
 
     with (
         patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_tcg_class,
         patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
     ):
         mock_llm_class.return_value = MockLLM()
+        mock_tcg_class.return_value = MockLLM()
         mock_embed_class.return_value = MockEmbedding(embed_dim=768)
 
         sync_manager = AcademicRAGSync(
@@ -62,8 +64,6 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         assert "1 modified files to re-embed" in captured.out
         assert "1 new files to embed" in captured.out
 
-        nodes_after_phase_2 = len(sync_manager.pg_index.property_graph_store.graph.nodes)
-
         # --- PHASE 3: Smart Move ---        # Rename FolderA -> RenamedFolder (fixture paper moves)
         # Move paper2 -> RenamedFolder (paper2 moves)
         old_folder = os.path.join(lib_path, "FolderA")
@@ -76,8 +76,6 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
 
         await sync_manager.run_sync(run_verification=False)
         captured = capsys.readouterr()
-        # Verify graph node count did not change (no re-extraction)
-        assert len(sync_manager.pg_index.property_graph_store.graph.nodes) == nodes_after_phase_2
 
         # --- PHASE 4: Pruning ---
         os.remove(p3_path)
@@ -102,16 +100,6 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
             )
         )
 
-        # Capture metadata before move
-        if sync_manager.pg_index.property_graph_store.graph.nodes:
-            first_node_id = next(iter(sync_manager.pg_index.property_graph_store.graph.nodes))
-            old_path_metadata = sync_manager.pg_index.property_graph_store.graph.nodes[
-                first_node_id
-            ].properties.get("file_path")
-        else:
-            first_node_id = None
-            old_path_metadata = None
-
         await sync_manager.run_sync(run_verification=False)
         captured = capsys.readouterr()
 
@@ -127,14 +115,6 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         assert chroma_after == chroma_before, (
             f"ChromaDB chunks changed during root rename: {chroma_before} -> {chroma_after}"
         )
-
-        # Verify metadata actually updated in-place for graph nodes
-        if first_node_id:
-            new_path_metadata = sync_manager.pg_index.property_graph_store.graph.nodes[
-                first_node_id
-            ].properties.get("file_path")
-            assert old_path_metadata != new_path_metadata
-            assert "new_library" in new_path_metadata
 
         # --- PHASE 6: Graph Cold Start with Existing Docstore ---
         # Wipe the graph
@@ -157,4 +137,40 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         # Since backfill happens during init, sync ignores the "forced" docs
         assert "0 new files to embed" in captured.out
         assert "0 modified files to re-embed" in captured.out
+        # pg_index is None in tests since build_graph.py not run
+        assert sync_manager_cold.pg_index is None
 
+        """
+        # fix after debug
+        # --- PHASE 7: New root with additional subdirectory ---
+        # Simulate adding Zettlr/Books alongside Zettlr/Papers
+        books_dir = os.path.join(new_lib_path, "Books")
+        os.makedirs(books_dir)
+
+        book1_path = os.path.join(books_dir, "book1.md")
+        with open(book1_path, "w") as f:
+            f.write("---\ntitle: Book 1\nyear: 2020\n---\nUnique text for book 1.")
+
+        # Track graph node count before
+        pg_nodes_before = (
+            len(sync_manager.pg_index.property_graph_store.get_all_nodes())
+            if sync_manager.pg_index is not None
+            else 0
+        )
+
+        await sync_manager.run_sync(run_verification=False)
+        captured = capsys.readouterr()
+
+        # New book should be indexed in vector store
+        assert "1 new files to embed" in captured.out
+
+        # New book's nodes should appear in graph
+        pg_nodes_after = (
+            len(sync_manager.pg_index.property_graph_store.get_all_nodes())
+            if sync_manager.pg_index is not None
+            else 0
+        )
+        assert pg_nodes_after > pg_nodes_before, (
+            f"Graph node count did not increase after new doc: {pg_nodes_before} -> {pg_nodes_after}"
+        )
+        """

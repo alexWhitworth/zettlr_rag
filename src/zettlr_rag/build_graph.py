@@ -5,22 +5,21 @@ from typing import cast
 import chromadb
 from llama_index.core import (
     PropertyGraphIndex,
-    Settings,
     StorageContext,
     VectorStoreIndex,
     load_index_from_storage,
 )
 from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
-from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.llms.google_genai import GoogleGenAI
+from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from zettlr_rag.consts import (
+    BUILD_GRAPH_MODEL,
     CHROMA_PATH,
     GRAPH_ENTITIES,
     GRAPH_INDEX_PATH,
     GRAPH_RELATIONS,
     METADATA_PATH,
-    BUILD_GRAPH_MODEL,
 )
 from zettlr_rag.rag_setup import setup_settings
 
@@ -69,8 +68,9 @@ def build_graph(
         possible_entities=GRAPH_ENTITIES,
         possible_relations=GRAPH_RELATIONS,
         strict=True,
-        num_workers=16,
+        num_workers=8,
         max_triplets_per_chunk=10,
+        max_retries=3,
     )
 
     os.makedirs(graph_path, exist_ok=True)

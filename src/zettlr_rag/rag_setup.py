@@ -4,11 +4,11 @@ import os
 import re
 import threading
 from collections.abc import Sequence
-from functools import partial
 from typing import Any, cast
 
 import chromadb
 import frontmatter  # type: ignore
+import nest_asyncio
 from chromadb.api.models.Collection import Collection
 from dotenv import load_dotenv
 from llama_index.core import (
@@ -295,7 +295,7 @@ class AcademicRAGSync:
         await self._initialize_graph()
 
     async def _initialize_graph(self) -> None:
-        """Initialize the Property Graph store and index."""
+        """Load existing property graph index if available."""
         kg_extractor = SchemaLLMPathExtractor(
             llm=Settings.llm,
             possible_entities=GRAPH_ENTITIES,
@@ -310,39 +310,11 @@ class AcademicRAGSync:
             storage_context = StorageContext.from_defaults(persist_dir=self.graph_path)
             self.pg_index = cast(PropertyGraphIndex, load_index_from_storage(storage_context))
         else:
-            logger.info("Initializing new property graph index...")
-            os.makedirs(self.graph_path, exist_ok=True)
-
-            # Link it to the existing docstore so nodes map correctly
-            if self.index and self.index.storage_context:
-                storage_context = StorageContext.from_defaults(
-                    docstore=self.index.storage_context.docstore
-                )
-                existing_nodes = [
-                    n
-                    for n in self.index.docstore.docs.values()
-                    if hasattr(n, "embedding") and n.embedding is not None
-                ]
-            else:
-                storage_context = StorageContext.from_defaults()
-                existing_nodes = []
-
-            if existing_nodes:
-                logger.info(
-                    f"Backfilling graph from {len(existing_nodes)} existing docstore nodes..."
-                )
-
-            # Run in executor to avoid nested asyncio.run() conflict
-            loop = asyncio.get_event_loop()
-            build_fn = partial(
-                PropertyGraphIndex,
-                nodes=existing_nodes,
-                kg_extractors=[kg_extractor],
-                storage_context=storage_context,
-                show_progress=bool(existing_nodes),
+            logger.info(
+                "No property graph found — graph retrieval disabled. "
+                "Run build_graph.py first to enable graph-enhanced retrieval."
             )
-            self.pg_index = await loop.run_in_executor(None, build_fn)
-            self.pg_index.storage_context.persist(persist_dir=self.graph_path)
+            self.pg_index = None
 
     def plan_sync(self, documents: list[Document]) -> dict[str, Any]:
         """Analyze disk documents vs index to create a sync plan."""
@@ -540,11 +512,11 @@ class AcademicRAGSync:
             texts = [n.get_content(metadata_mode=MetadataMode.EMBED) for n in nodes]
             try:
                 embeddings = Settings.embed_model.get_text_embedding_batch(texts)
-                for node, emb in zip(nodes, embeddings):
+                for node, emb in zip(nodes, embeddings, strict=True):
                     node.embedding = emb
             except Exception as e:
                 logger.warning(f"   Batch embedding failed, falling back to individual: {e}")
-                for node, text in zip(nodes, texts):
+                for node, text in zip(nodes, texts, strict=True):
                     try:
                         node.embedding = Settings.embed_model.get_text_embedding(text)
                     except Exception as e2:
@@ -569,6 +541,26 @@ class AcademicRAGSync:
             total_processed += len(batch_docs)
             self.index.storage_context.persist(persist_dir=self.metadata_path)
             logger.info(f"💾 Checkpoint: {total_processed}/{total_docs} docs processed")
+
+            # 4. Incremental graph update
+            if self.pg_index is not None:
+                try:
+                    nest_asyncio.apply()
+                    kg_extractor = SchemaLLMPathExtractor(
+                        llm=Settings.llm,
+                        possible_entities=GRAPH_ENTITIES,
+                        possible_relations=GRAPH_RELATIONS,
+                        strict=True,
+                        num_workers=4,
+                        max_triplets_per_chunk=10,
+                    )
+                    self.pg_index._kg_extractors = [kg_extractor]
+                    self.pg_index.insert_nodes(nodes)
+                    self.pg_index.storage_context.persist(persist_dir=self.graph_path)
+                except Exception as e:
+                    logger.warning(f"Graph update failed for batch, skipping: {e}")
+
+            total_processed += len(batch_docs)
 
         return total_processed
 

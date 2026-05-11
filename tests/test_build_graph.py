@@ -63,7 +63,6 @@ async def test_build_graph_standalone(temp_workspace):
         ):
             await loop.run_in_executor(None, build_graph, chroma_path, metadata_path, graph_path)
 
-
             # Verify it tried to create the index
             assert mock_pg_index.called
             # Verify nodes were passed to it

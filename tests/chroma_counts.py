@@ -71,7 +71,7 @@ orphaned = chroma_ids - tracked_node_ids
 results = col.get(include=["documents"])
 bibtex_chunks = [
     id_
-    for id_, doc in zip(results["ids"], results["documents"])
+    for id_, doc in zip(results["ids"], results["documents"], strict=True)
     if doc and BIBTEX_PATTERN.search(doc)
 ]
 
