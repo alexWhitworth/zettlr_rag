@@ -536,21 +536,26 @@ class AcademicRAGSync:
                 n
                 for n in nodes
                 # Filter short nodes and raw BibTeX blocks
-                if len(n.get_content().strip()) >= 20 and not BIBTEX_PATTERN.search(n.get_content())
+                if len(n.get_content().strip()) >= 20 and
+                not BIBTEX_PATTERN.search(n.get_content())
             ]
 
             if not nodes:
                 continue
 
-            print(f"   Embedding {len(nodes)} nodes individually...")
-            embedded_count = 0
-            for node in nodes:
-                text = node.get_content(metadata_mode=MetadataMode.EMBED)
-                try:
-                    node.embedding = Settings.embed_model.get_text_embedding(text)
-                    embedded_count += 1
-                except Exception as e:
-                    logger.warning(f"   Failed to embed node: {e}")
+            print(f"   Embedding {len(nodes)} nodes in batches...")
+            texts = [n.get_content(metadata_mode=MetadataMode.EMBED) for n in nodes]
+            try:
+                embeddings = Settings.embed_model.get_text_embedding_batch(texts)
+                for node, emb in zip(nodes, embeddings):
+                    node.embedding = emb
+            except Exception as e:
+                logger.warning(f"   Batch embedding failed, falling back to individual: {e}")
+                for node, text in zip(nodes, texts):
+                    try:
+                        node.embedding = Settings.embed_model.get_text_embedding(text)
+                    except Exception as e2:
+                        logger.warning(f"   Failed to embed node {node.node_id[:8]}: {e2}")
 
             nodes = [n for n in nodes if n.embedding is not None]
             if not nodes:
