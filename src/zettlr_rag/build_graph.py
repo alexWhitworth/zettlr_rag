@@ -12,6 +12,7 @@ from llama_index.core import (
 )
 from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
 from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.llms.google_genai import GoogleGenAI
 
 from zettlr_rag.consts import (
     CHROMA_PATH,
@@ -19,6 +20,7 @@ from zettlr_rag.consts import (
     GRAPH_INDEX_PATH,
     GRAPH_RELATIONS,
     METADATA_PATH,
+    BUILD_GRAPH_MODEL,
 )
 from zettlr_rag.rag_setup import setup_settings
 
@@ -60,7 +62,10 @@ def build_graph(
     logger.info(f"Building graph from {len(existing_nodes)} nodes...")
 
     kg_extractor = SchemaLLMPathExtractor(
-        llm=Settings.llm,
+        llm=GoogleGenAI(
+            model=f"models/{BUILD_GRAPH_MODEL}",
+            api_key=cast(str, os.getenv("GEMINI_API_KEY")),
+        ),
         possible_entities=GRAPH_ENTITIES,
         possible_relations=GRAPH_RELATIONS,
         strict=True,

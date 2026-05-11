@@ -9,6 +9,7 @@ from typing import Literal
 # ── LLM Models ──────────────────────────────────────────────────────────────
 MODEL_NAME = "gemini-3-flash-preview"
 EMBEDDING_MODEL_NAME = "gemini-embedding-2-preview"
+BUILD_GRAPH_MODEL = "gemini-2.5-flash"
 
 # ── Prompts ──────────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = (
