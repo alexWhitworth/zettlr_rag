@@ -1,10 +1,12 @@
 import os
+import json
 
 import pytest
 from llama_index.core import Settings
 from llama_index.core.embeddings.mock_embed_model import MockEmbedding
 from llama_index.core.llms.mock import MockLLM
 from llama_index.core.node_parser import MarkdownNodeParser
+from llama_index.core.base.llms.types import ChatResponse, ChatMessage
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -73,3 +75,44 @@ def temp_workspace(tmp_path):
         "metadata": str(tmp_path / "metadata"),
         "graph": str(tmp_path / "graph"),
     }
+
+
+class TripleExtractingMockLLM(MockLLM):
+    """Returns minimal valid SchemaLLMPathExtractor output for testing."""
+
+    def chat(self, messages, **kwargs):
+        # Return a valid triple that SchemaLLMPathExtractor can parse
+        triple = {
+            "entities": [
+                {"name": "test_entity_a", "type": "CONCEPT"},
+                {"name": "test_entity_b", "type": "CONCEPT"},
+            ],
+            "relations": [
+                {
+                    "source": "test_entity_a",
+                    "target": "test_entity_b",
+                    "type": "RELATED_TO",
+                }
+            ],
+        }
+        return ChatResponse(
+            message=ChatMessage(role="assistant", content=json.dumps(triple))
+        )
+
+    async def achat(self, messages, **kwargs):
+        return self.chat(messages, **kwargs)
+
+    def structured_predict(self, output_cls, prompt, **kwargs):
+        # SchemaLLMPathExtractor uses structured_predict
+        entities = [
+            output_cls.__fields__["entities"].outer_type_(
+                name="test_entity_a", label="CONCEPT"
+            ),
+            output_cls.__fields__["entities"].outer_type_(
+                name="test_entity_b", label="CONCEPT"
+            ),
+        ]
+        return output_cls(entities=entities, relations=[])
+
+    async def astructured_predict(self, output_cls, prompt, **kwargs):
+        return self.structured_predict(output_cls, prompt, **kwargs)
