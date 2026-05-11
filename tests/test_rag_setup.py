@@ -42,7 +42,7 @@ def test_system_prompt_is_defined():
 
 
 @pytest.mark.asyncio
-async def test_main_async_survey(temp_chroma_db, temp_metadata_path, tmp_path):
+async def test_main_async_survey(temp_chroma_db, temp_metadata_path, temp_graph_path, tmp_path):
     # Create mock library
     lib_dir = tmp_path / "mock_lib"
     lib_dir.mkdir()
@@ -62,11 +62,13 @@ async def test_main_async_survey(temp_chroma_db, temp_metadata_path, tmp_path):
             base_path=str(lib_dir),
             chroma_path=temp_chroma_db,
             metadata_path=temp_metadata_path,
+            graph_path=temp_graph_path,
             run_verification=False,
         )
 
         assert os.path.exists(temp_chroma_db)
         assert os.path.exists(temp_metadata_path)
+        assert os.path.exists(temp_graph_path)
         assert len(os.listdir(temp_metadata_path)) > 0
 
 

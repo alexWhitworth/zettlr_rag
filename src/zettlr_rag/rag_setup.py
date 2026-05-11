@@ -5,6 +5,7 @@ import re
 import threading
 from collections.abc import Sequence
 from typing import Any, cast
+from functools import partial
 
 import chromadb
 import frontmatter  # type: ignore
@@ -269,7 +270,7 @@ class AcademicRAGSync:
         self.chroma_collection: Collection | None = None
         self.pg_index: PropertyGraphIndex | None = None
 
-    def initialize(self) -> None:
+    async def initialize(self) -> None:
         """Initialize settings, vector store, and index."""
         setup_settings()
 
@@ -291,9 +292,9 @@ class AcademicRAGSync:
             storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
             self.index = VectorStoreIndex([], storage_context=storage_context)
 
-        self._initialize_graph()
+        await self._initialize_graph()
 
-    def _initialize_graph(self) -> None:
+    async def _initialize_graph(self) -> None:
         """Initialize the Property Graph store and index."""
         kg_extractor = SchemaLLMPathExtractor(
             llm=Settings.llm,
@@ -308,46 +309,37 @@ class AcademicRAGSync:
             self.pg_index = cast(PropertyGraphIndex, load_index_from_storage(storage_context))
         else:
             logger.info("Initializing new property graph index...")
+            os.makedirs(self.graph_path, exist_ok=True)
 
             # Link it to the existing docstore so nodes map correctly
             if self.index and self.index.storage_context:
                 storage_context = StorageContext.from_defaults(
                     docstore=self.index.storage_context.docstore
                 )
-
-                # Fetch all existing nodes from the docstore that have been parsed
-                # (We check for embedding to ensure they are the content nodes, not the parent Document nodes)
                 existing_nodes = [
                     n
                     for n in self.index.docstore.docs.values()
                     if hasattr(n, "embedding") and n.embedding is not None
                 ]
-
-                if existing_nodes:
-                    logger.info(
-                        f"Backfilling graph from {len(existing_nodes)} existing docstore nodes..."
-                    )
-                    self.pg_index = PropertyGraphIndex(
-                        nodes=existing_nodes,
-                        kg_extractors=[kg_extractor],
-                        storage_context=storage_context,
-                        show_progress=True,
-                    )
-                else:
-                    self.pg_index = PropertyGraphIndex(
-                        nodes=[],
-                        kg_extractors=[kg_extractor],
-                        storage_context=storage_context,
-                    )
             else:
                 storage_context = StorageContext.from_defaults()
-                self.pg_index = PropertyGraphIndex(
-                    nodes=[],
-                    kg_extractors=[kg_extractor],
-                    storage_context=storage_context,
+                existing_nodes = []
+
+            if existing_nodes:
+                logger.info(
+                    f"Backfilling graph from {len(existing_nodes)} existing docstore nodes..."
                 )
 
-            os.makedirs(self.graph_path, exist_ok=True)
+            # Run in executor to avoid nested asyncio.run() conflict
+            loop = asyncio.get_event_loop()
+            build_fn = partial(
+                PropertyGraphIndex,
+                nodes=existing_nodes,
+                kg_extractors=[kg_extractor],
+                storage_context=storage_context,
+                show_progress=bool(existing_nodes),
+            )
+            self.pg_index = await loop.run_in_executor(None, build_fn)
             self.pg_index.storage_context.persist(persist_dir=self.graph_path)
 
     def plan_sync(self, documents: list[Document]) -> dict[str, Any]:
@@ -581,7 +573,7 @@ class AcademicRAGSync:
 
     async def run_sync(self, run_verification: bool = True) -> None:
         """Orchestrate the full synchronization process."""
-        self.initialize()
+        await self.initialize()
 
         print(f"📂 Scanning library: {self.base_path}")
         documents = load_academic_markdown(self.base_path)
@@ -631,10 +623,11 @@ class AcademicRAGSync:
 async def main_async(
     base_path: str = (
         "/Users/awhitworth/Library/CloudStorage/"
-        "ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr-Papers"
+        "ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr/Papers"
     ),
-    chroma_path: str = "./chroma_db_academic",
-    metadata_path: str = "./.index_metadata",
+    chroma_path: str = CHROMA_PATH,
+    metadata_path: str = METADATA_PATH,
+    graph_path: str = GRAPH_INDEX_PATH,
     checkpoint_batch_size: int = 50,
     run_verification: bool = True,
 ) -> None:
@@ -642,6 +635,7 @@ async def main_async(
         base_path=base_path,
         chroma_path=chroma_path,
         metadata_path=metadata_path,
+        graph_path=graph_path,
         checkpoint_batch_size=checkpoint_batch_size,
     )
     await sync_manager.run_sync(run_verification=run_verification)
@@ -662,7 +656,7 @@ def main() -> None:
         sys.exit(1)
 
     # verification off: process is stable
-    asyncio.run(main_async(base_path=path, run_verification=True))
+    asyncio.run(main_async(base_path=path, run_verification=False))
 
 
 if __name__ == "__main__":

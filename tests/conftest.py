@@ -39,3 +39,11 @@ def temp_metadata_path(tmp_path):
     path = tmp_path / "test_metadata"
     path.mkdir(exist_ok=True)
     return str(path)
+
+
+@pytest.fixture
+def temp_graph_path(tmp_path):
+    """Provides a temporary path for property graph metadata."""
+    path = tmp_path / "test_graph"
+    path.mkdir(exist_ok=True)
+    return str(path)
