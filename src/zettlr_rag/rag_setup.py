@@ -40,6 +40,8 @@ from zettlr_rag.consts import (
     METADATA_PATH,
     MODEL_NAME,
     SYSTEM_PROMPT,
+    GRAPH_ENTITIES,
+    GRAPH_RELATIONS,
 )
 from zettlr_rag.metrics import TokenUsage
 
@@ -293,44 +295,58 @@ class AcademicRAGSync:
 
     def _initialize_graph(self) -> None:
         """Initialize the Property Graph store and index."""
+        kg_extractor = SchemaLLMPathExtractor(
+            llm=Settings.llm,
+            possible_entities=GRAPH_ENTITIES,
+            possible_relations=GRAPH_RELATIONS,
+            strict=True,
+        )
+
         if os.path.exists(self.graph_path) and os.listdir(self.graph_path):
             logger.info("Loading existing property graph index...")
             storage_context = StorageContext.from_defaults(persist_dir=self.graph_path)
             self.pg_index = cast(PropertyGraphIndex, load_index_from_storage(storage_context))
         else:
-            from typing import Literal
-
             logger.info("Initializing new property graph index...")
-            kg_extractor = SchemaLLMPathExtractor(
-                llm=Settings.llm,
-                possible_entities=Literal[
-                    "Document", "Author", "Method", "Dataset", "Metric", "Concept", "Organization"
-                ],
-                possible_relations=Literal[
-                    "AUTHORED_BY",
-                    "USES_METHOD",
-                    "BENCHMARKED_ON",
-                    "IMPROVES_UPON",
-                    "DEFINES",
-                    "REPORTS",
-                    "AFFILIATED_WITH",
-                ],
-                strict=True,
-            )
 
             # Link it to the existing docstore so nodes map correctly
             if self.index and self.index.storage_context:
                 storage_context = StorageContext.from_defaults(
                     docstore=self.index.storage_context.docstore
                 )
+
+                # Fetch all existing nodes from the docstore that have been parsed
+                # (We check for embedding to ensure they are the content nodes, not the parent Document nodes)
+                existing_nodes = [
+                    n
+                    for n in self.index.docstore.docs.values()
+                    if hasattr(n, "embedding") and n.embedding is not None
+                ]
+
+                if existing_nodes:
+                    logger.info(
+                        f"Backfilling graph from {len(existing_nodes)} existing docstore nodes..."
+                    )
+                    self.pg_index = PropertyGraphIndex(
+                        nodes=existing_nodes,
+                        kg_extractors=[kg_extractor],
+                        storage_context=storage_context,
+                        show_progress=True,
+                    )
+                else:
+                    self.pg_index = PropertyGraphIndex(
+                        nodes=[],
+                        kg_extractors=[kg_extractor],
+                        storage_context=storage_context,
+                    )
             else:
                 storage_context = StorageContext.from_defaults()
+                self.pg_index = PropertyGraphIndex(
+                    nodes=[],
+                    kg_extractors=[kg_extractor],
+                    storage_context=storage_context,
+                )
 
-            self.pg_index = PropertyGraphIndex(
-                nodes=[],
-                kg_extractors=[kg_extractor],
-                storage_context=storage_context,
-            )
             os.makedirs(self.graph_path, exist_ok=True)
             self.pg_index.storage_context.persist(persist_dir=self.graph_path)
 
@@ -346,37 +362,20 @@ class AcademicRAGSync:
             doc_id: self.index.docstore.get_document_hash(doc_id) for doc_id in existing_doc_ids
         }
 
-        # Determine if we need to backfill the graph
-        is_graph_empty = False
-        if self.pg_index and self.pg_index.property_graph_store:
-            graph_nodes = getattr(self.pg_index.property_graph_store, "graph", None)
-            if graph_nodes and not graph_nodes.nodes:
-                is_graph_empty = True
-
-        # If the docstore has entries but the graph is completely empty,
-        # force re-indexing of all existing valid documents to backfill the graph.
-        force_reindex = is_graph_empty and len(existing_hashes) > 0
-
         disk_doc_ids = {doc.id_ for doc in documents}
         stale_doc_ids = [doc_id for doc_id in existing_doc_ids if doc_id not in disk_doc_ids]
         new_docs = [doc for doc in documents if doc.id_ not in existing_hashes]
-
-        if force_reindex:
-            logger.info("Graph is empty but docstore is populated. Forcing full graph backfill.")
-            # Treat all disk documents that aren't stale as "changed" to force re-extraction
-            changed_docs = [doc for doc in documents if doc.id_ in existing_hashes]
-        else:
-            changed_docs = [
-                doc
-                for doc in documents
-                if doc.id_ in existing_hashes and existing_hashes[doc.id_] != doc.hash
-            ]
+        changed_docs = [
+            doc
+            for doc in documents
+            if doc.id_ in existing_hashes and existing_hashes[doc.id_] != doc.hash
+        ]
 
         # Move Detection
         docs_to_move: list[tuple[str, Document]] = []
         truly_new_docs = []
 
-        if stale_doc_ids and new_docs and not force_reindex:
+        if stale_doc_ids and new_docs:
             logger.info(f"🔍 Checking {len(stale_doc_ids)} stale entries for potential moves...")
             stale_text_map = {}
             for s_id in stale_doc_ids:

@@ -74,7 +74,22 @@ BIBTEX_PATTERN = re.compile(
     r"```bibtex|@(?:book|article|misc|inproceedings|phdthesis|techreport|unpublished)\b"
 )
 
-# ── Paths ────────────────────────────────────────────────────────────────────
+from typing import Literal
+
+# ── Property Graph Schema ───────────────────────────────────────────────────
+GRAPH_ENTITIES = Literal[
+    "Document", "Author", "Method", "Dataset", "Metric", "Concept", "Organization"
+]
+
+GRAPH_RELATIONS = Literal[
+    "AUTHORED_BY",
+    "USES_METHOD",
+    "BENCHMARKED_ON",
+    "IMPROVES_UPON",
+    "DEFINES",
+    "REPORTS",
+    "AFFILIATED_WITH",
+]
 CHROMA_PATH = "./chroma_db_academic"
 METADATA_PATH = "./.index_metadata"
 GRAPH_INDEX_PATH = "./.graph_index"
