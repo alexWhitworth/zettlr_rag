@@ -9,29 +9,6 @@ from llama_index.core.llms.mock import MockLLM
 from zettlr_rag.rag_setup import AcademicRAGSync
 
 
-@pytest.fixture
-def temp_workspace(tmp_path):
-    """Create a temporary workspace with reproducible state."""
-    # Create library structure
-    lib_dir = tmp_path / "library"
-    lib_dir.mkdir()
-
-    # Create subfolder and fixture paper with unique content
-    folder_a = lib_dir / "FolderA"
-    folder_a.mkdir()
-
-    paper_path = folder_a / "paper1.md"
-    paper_path.write_text("---\ntitle: Fixture Paper\n---\nUnique text for fixture paper.")
-
-    return {
-        "root": str(tmp_path),
-        "lib": str(lib_dir),
-        "chroma": str(tmp_path / "chroma"),
-        "metadata": str(tmp_path / "metadata"),
-        "graph": str(tmp_path / "graph"),
-    }
-
-
 @pytest.mark.asyncio
 async def test_full_rag_lifecycle(temp_workspace, capsys):
     """
@@ -165,20 +142,19 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
 
         shutil.rmtree(graph_path)
 
-        # Re-initialize the sync manager to trigger cold start logic
-        # We must patch _initialize_graph out of run_sync here because PropertyGraphIndex internally uses asyncio.run 
-        # which crashes pytest.mark.asyncio. We manually test the backfill logs inside the patch block.
-        with patch("zettlr_rag.rag_setup.AcademicRAGSync._initialize_graph", autospec=True) as mock_init:
-            sync_manager_cold = AcademicRAGSync(
-                base_path=new_lib_path,
-                chroma_path=chroma_path,
-                metadata_path=metadata_path,
-                graph_path=graph_path,
-            )
-            
-            await sync_manager_cold.run_sync(run_verification=False)
-            captured = capsys.readouterr()
-            
-            # Since backfill happens during init, sync ignores the "forced" docs
-            assert "0 new files to embed" in captured.out
-            assert "0 modified files to re-embed" in captured.out
+        # Re-initialize the sync manager to trigger cold start logic.
+        # Now that _initialize_graph uses run_in_executor, it should be safe to run in tests.
+        sync_manager_cold = AcademicRAGSync(
+            base_path=new_lib_path,
+            chroma_path=chroma_path,
+            metadata_path=metadata_path,
+            graph_path=graph_path,
+        )
+
+        await sync_manager_cold.run_sync(run_verification=False)
+        captured = capsys.readouterr()
+
+        # Since backfill happens during init, sync ignores the "forced" docs
+        assert "0 new files to embed" in captured.out
+        assert "0 modified files to re-embed" in captured.out
+

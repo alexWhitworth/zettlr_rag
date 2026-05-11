@@ -4,8 +4,8 @@ import os
 import re
 import threading
 from collections.abc import Sequence
-from typing import Any, cast
 from functools import partial
+from typing import Any, cast
 
 import chromadb
 import frontmatter  # type: ignore
@@ -37,12 +37,12 @@ from zettlr_rag.consts import (
     BIBTEX_PATTERN,
     CHROMA_PATH,
     EMBEDDING_MODEL_NAME,
+    GRAPH_ENTITIES,
     GRAPH_INDEX_PATH,
+    GRAPH_RELATIONS,
     METADATA_PATH,
     MODEL_NAME,
     SYSTEM_PROMPT,
-    GRAPH_ENTITIES,
-    GRAPH_RELATIONS,
 )
 from zettlr_rag.metrics import TokenUsage
 
@@ -530,8 +530,7 @@ class AcademicRAGSync:
                 n
                 for n in nodes
                 # Filter short nodes and raw BibTeX blocks
-                if len(n.get_content().strip()) >= 20 and
-                not BIBTEX_PATTERN.search(n.get_content())
+                if len(n.get_content().strip()) >= 20 and not BIBTEX_PATTERN.search(n.get_content())
             ]
 
             if not nodes:

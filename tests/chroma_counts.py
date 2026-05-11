@@ -11,10 +11,10 @@ from typing import cast
 import chromadb
 from dotenv import load_dotenv
 from llama_index.core import (
+    PropertyGraphIndex,
     Settings,
     StorageContext,
     VectorStoreIndex,
-    PropertyGraphIndex,
     load_index_from_storage,
 )
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
@@ -32,7 +32,7 @@ from zettlr_rag.rag_setup import TokenCapturingGemini
 load_dotenv()
 if not os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = cast(str, os.getenv("GEMINI_API_KEY"))
-    
+
 Settings.embed_model = GoogleGenAIEmbedding(
     model_name="models/gemini-embedding-2-preview",
     api_key=cast(str, os.getenv("GEMINI_API_KEY")),
@@ -45,9 +45,7 @@ Settings.llm = TokenCapturingGemini(
 db = chromadb.PersistentClient(path=CHROMA_PATH)
 col = db.get_collection("research_papers")
 vector_store = ChromaVectorStore(chroma_collection=col)
-storage_context = StorageContext.from_defaults(
-    vector_store=vector_store, persist_dir=METADATA_PATH
-)
+storage_context = StorageContext.from_defaults(vector_store=vector_store, persist_dir=METADATA_PATH)
 index = cast(VectorStoreIndex, load_index_from_storage(storage_context))
 
 # Load graph index

@@ -47,3 +47,26 @@ def temp_graph_path(tmp_path):
     path = tmp_path / "test_graph"
     path.mkdir(exist_ok=True)
     return str(path)
+
+
+@pytest.fixture
+def temp_workspace(tmp_path):
+    """Create a temporary workspace with reproducible state."""
+    # Create library structure
+    lib_dir = tmp_path / "library"
+    lib_dir.mkdir()
+
+    # Create subfolder and fixture paper with unique content
+    folder_a = lib_dir / "FolderA"
+    folder_a.mkdir()
+
+    paper_path = folder_a / "paper1.md"
+    paper_path.write_text("---\ntitle: Fixture Paper\n---\nUnique text for fixture paper.")
+
+    return {
+        "root": str(tmp_path),
+        "lib": str(lib_dir),
+        "chroma": str(tmp_path / "chroma"),
+        "metadata": str(tmp_path / "metadata"),
+        "graph": str(tmp_path / "graph"),
+    }

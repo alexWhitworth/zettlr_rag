@@ -4,6 +4,7 @@ Central repository for all constants used in zettlr_rag.
 """
 
 import re
+from typing import Literal
 
 # ── LLM Models ──────────────────────────────────────────────────────────────
 MODEL_NAME = "gemini-3-flash-preview"
@@ -73,8 +74,6 @@ GEMINI_CONTEXT_WINDOWS: dict[str, int] = {
 BIBTEX_PATTERN = re.compile(
     r"```bibtex|@(?:book|article|misc|inproceedings|phdthesis|techreport|unpublished)\b"
 )
-
-from typing import Literal
 
 # ── Property Graph Schema ───────────────────────────────────────────────────
 GRAPH_ENTITIES = Literal[
