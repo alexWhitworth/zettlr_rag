@@ -301,6 +301,8 @@ class AcademicRAGSync:
             possible_entities=GRAPH_ENTITIES,
             possible_relations=GRAPH_RELATIONS,
             strict=True,
+            num_workers=16,
+            max_triplets_per_chunk=10,
         )
 
         if os.path.exists(self.graph_path) and os.listdir(self.graph_path):
