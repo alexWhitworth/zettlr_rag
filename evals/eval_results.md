@@ -116,3 +116,5 @@ I am now extending my RAG to include these additional sources.
   implemented with file links. I will implement as a Property Graph.
   2. Karpathy also adds linting rules for regular maintenance. This is already achieved by the
   existing `rag_setup.py` smart-sync.
+
+**Update 5/10/2026:** Property Graph indexing and retrieval now added.
