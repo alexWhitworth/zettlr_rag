@@ -1,7 +1,7 @@
 ## Evaluation Results
 
 **Date: May 7, 2026**
-**Note: This evaluation was done before `PropertyGraphIndex` and retrieval were added to the library.**
+**Note:** _This evaluation was done before `PropertyGraphIndex` and retrieval were added to the library._
   - Added May 10, 2026
 
 ### My Corpus Stats:
@@ -115,5 +115,3 @@ I am now extending my RAG to include these additional sources.
   implemented with file links. I will implement as a Property Graph.
   2. Karpathy also adds linting rules for regular maintenance. This is already achieved by the
   existing `rag_setup.py` smart-sync.
-  - **TODO:** Add `llama_index`'s `PropertyGraphIndex` and PG retrieval for in the existing 
-  `QueryFusionRetriever` retriever.
