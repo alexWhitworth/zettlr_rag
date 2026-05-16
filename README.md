@@ -110,8 +110,8 @@ _full system design for AMDM, full implementation was overkill for this project.
 ## Usage
 
 ### 1. Smart Sync (Setup & Maintenance)
-The `zettlr-rag-setup` command uses **Smart Sync** logic. It tracks file hashes in `./.index_metadata` 
-to perform incremental updates.
+Uses **Smart Sync** logic. It tracks file hashes in `./.index_metadata` to perform incremental
+updates.
 
 - **Initial Run**: Processes your entire library.
 - **Subsequent Runs**: Detects and indexes **only** new or modified files.
