@@ -4,16 +4,15 @@ A specialized Retrieval-Augmented Generation (RAG) system for personal note libr
 implements **MD-RAG** (Metadata RAG), preserving and utilizing YAML frontmatter from Zettlr markdown 
 files for high-precision scientific retrieval.
 
-It can equivalently be thought of as an "LLM Knowledge Base" [Karpathy](https://x.com/karpathy/status/2039805659525644595),
+It can equivalently be thought of as an "LLM Knowledge Base" ([Karpathy](https://x.com/karpathy/status/2039805659525644595)),
 though technically it is the "fancy RAG" that Karpathys states he doesn't need for his ~100 
 file LLM knowledge base. 
 
 The implementation was fully evaluated with ~700 academic papers vs [Consensus AI](https://consensus.app/) 
 (SotA Academic RAG).
-    - **tl;dr:** While I can't compete with Consensus AI's 200M+ paper breadth, my system achieved 
-    *45% parity* on deep synthesis queries. 
-        - _See `evals/eval_results.md` for the full details._
-
+- **tl;dr:** While I can't compete with Consensus AI's 200M+ paper breadth, my system achieved 
+*45% parity* on deep synthesis queries. 
+    - _See `evals/eval_results.md` for the full details._
 
 ## Installation
 
