@@ -118,7 +118,15 @@ to perform incremental updates.
 - **Deletions**: Automatically removes vectors for files you've deleted from your library.
 
 ```bash
-zettlr-rag-setup
+# preferably done within tmux:
+# 01. Vector initialization (one-time)
+uv run src/zettlr_rag/rag_setup.py
+
+# 02. Property Graph setup (one-time)
+uv run src/zettlr_rag/build_graph.py
+
+# 03. Maintenance (smart-sync): updates both vector embeddings and Property Graph
+uv run src/zettlr_rag/rag_setup.py
 ```
 
 ### 2. Querying
