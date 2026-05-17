@@ -160,7 +160,7 @@ def sanitize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
 
 def setup_settings() -> None:
     """Initialize global LlamaIndex settings."""
-    load_dotenv()
+    load_dotenv(override=True)
     if not os.getenv("GEMINI_API_KEY"):
         raise ValueError("API Key not found. Check your .env file.")
 

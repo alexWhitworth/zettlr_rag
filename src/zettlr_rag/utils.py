@@ -50,7 +50,7 @@ def load_langfuse_traces() -> pd.DataFrame:
     """
     from dotenv import load_dotenv
 
-    load_dotenv(dotenv_path=".env.langfuse", override=False)
+    load_dotenv(dotenv_path=".env.langfuse", override=True)
 
     try:
         from langfuse import get_client

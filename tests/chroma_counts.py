@@ -29,7 +29,7 @@ from zettlr_rag.consts import (
 )
 from zettlr_rag.rag_setup import TokenCapturingGemini
 
-load_dotenv()
+load_dotenv(override=True)
 if not os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = cast(str, os.getenv("GEMINI_API_KEY"))
 
