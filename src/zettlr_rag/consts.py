@@ -6,7 +6,36 @@ Central repository for all constants used in zettlr_rag.
 import re
 from typing import Literal
 
-# ── LLM Models ──────────────────────────────────────────────────────────────
+# =====================================================================
+# AVAILABLE MODELS
+# =====================================================================
+
+# GEMINI 3.x SERIES (Current & Recommended)
+# Flagship Model (Recommended for production, coding, and agentic workflows)
+GEMINI_3_5_FLASH = "gemini-3.5-flash"
+
+# High-efficiency / Low-cost / Low-latency Models
+GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite"
+GEMINI_3_FLASH_PREVIEW = "gemini-3-flash-preview"
+
+# Advanced Reasoning & Preview Models
+GEMINI_3_1_PRO_PREVIEW = "gemini-3.1-pro-preview"
+GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS = "gemini-3.1-pro-preview-customtools"
+
+# Multimodal Visual & Audio Generation
+GEMINI_3_1_FLASH_IMAGE = "gemini-3.1-flash-image"
+GEMINI_3_PRO_IMAGE = "gemini-3-pro-image"
+GEMINI_3_1_FLASH_TTS_PREVIEW = "gemini-3-1-flash-tts-preview"
+
+# GEMINI 2.5 SERIES (Legacy / Deprecating)
+# Note: Google is scheduled to phase these out mid-2026.
+# It is recommended to migrate to the 3.x series equivalents.
+GEMINI_2_5_FLASH = "gemini-2.5-flash"
+GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite"
+
+# =====================================================================
+# Current models used in this project (update as needed)
+# =====================================================================
 MODEL_NAME = "gemini-3-flash-preview"
 EMBEDDING_MODEL_NAME = "gemini-embedding-2-preview"
 BUILD_GRAPH_MODEL = "gemini-2.5-flash-lite"
@@ -38,6 +67,10 @@ GEMINI_PRICING: dict[str, dict[str, float]] = {
     "gemini-2.0-flash-lite": {
         "input": 0.000_000_075,
         "output": 0.000_000_300,
+    },
+    "gemini-2.5-flash-lite": {
+        "input": 0.000_000_100,  # $0.10 per 1M input tokens
+        "output": 0.000_000_400,  # $0.40 per 1M output tokens (incl. thinking)
     },
     "gemini-1.5-pro": {
         "input": 0.000_001_250,

@@ -1,6 +1,6 @@
 import json
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from llama_index.core.embeddings.mock_embed_model import MockEmbedding
@@ -8,11 +8,13 @@ from llama_index.core.llms.mock import MockLLM
 
 from zettlr_rag.consts import SYSTEM_PROMPT
 from zettlr_rag.rag_setup import (
+    AcademicRAGSync,
     TokenCapturingGemini,
     _usage_store,
     get_last_token_usage,
     load_academic_markdown,
     main_async,
+    reset_token_usage,
     sanitize_metadata,
     setup_settings,
 )
@@ -147,3 +149,261 @@ def test_setup_settings_success(mock_getenv, mock_dotenv):
         mock_embed.return_value = MockEmbedding(embed_dim=768)
         setup_settings()
         assert mock_gemini.called
+
+
+@patch("zettlr_rag.rag_setup.load_dotenv")
+@patch("os.getenv")
+def test_setup_settings_copies_gemini_key_to_google(mock_getenv, mock_dotenv):
+    """When GOOGLE_API_KEY is absent, setup_settings copies GEMINI_API_KEY into os.environ."""
+    mock_getenv.side_effect = lambda k, default=None: (
+        "gemini-key" if k == "GEMINI_API_KEY" else None
+    )
+    with (
+        patch("os.environ", {}) as mock_env,
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_gemini,
+        patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed,
+    ):
+        mock_gemini.return_value = MockLLM()
+        mock_embed.return_value = MockEmbedding(embed_dim=768)
+        setup_settings()
+        assert mock_env.get("GOOGLE_API_KEY") == "gemini-key"
+
+
+def test_reset_token_usage():
+    """reset_token_usage clears accumulated counts to zero."""
+    _usage_store.last_usage = MagicMock(input_tokens=99, output_tokens=88)
+    reset_token_usage()
+    usage = get_last_token_usage()
+    assert usage.input_tokens == 0
+    assert usage.output_tokens == 0
+
+
+def test_token_capturing_gemini_complete():
+    """complete() calls super and stores token usage."""
+    with patch("zettlr_rag.rag_setup.GoogleGenAI.__init__", return_value=None):
+        llm = TokenCapturingGemini(model="models/gemini-1.5-flash", api_key="dummy")
+
+    mock_resp = MagicMock()
+    mock_resp.raw = None
+    mock_resp.additional_kwargs = {"prompt_tokens": 5, "completion_tokens": 10}
+
+    with patch("zettlr_rag.rag_setup.GoogleGenAI.complete", return_value=mock_resp):
+        reset_token_usage()
+        result = llm.complete("hello")
+        assert result is mock_resp
+        assert get_last_token_usage().input_tokens == 5
+        assert get_last_token_usage().output_tokens == 10
+
+
+def test_token_capturing_gemini_chat():
+    """chat() calls super and stores token usage."""
+    with patch("zettlr_rag.rag_setup.GoogleGenAI.__init__", return_value=None):
+        llm = TokenCapturingGemini(model="models/gemini-1.5-flash", api_key="dummy")
+
+    mock_resp = MagicMock()
+    mock_resp.raw = None
+    mock_resp.additional_kwargs = {"prompt_tokens": 7, "completion_tokens": 14}
+
+    with patch("zettlr_rag.rag_setup.GoogleGenAI.chat", return_value=mock_resp):
+        reset_token_usage()
+        result = llm.chat([])
+        assert result is mock_resp
+        assert get_last_token_usage().input_tokens == 7
+        assert get_last_token_usage().output_tokens == 14
+
+
+@pytest.mark.asyncio
+async def test_token_capturing_gemini_acomplete():
+    """acomplete() calls super and stores token usage."""
+    with patch("zettlr_rag.rag_setup.GoogleGenAI.__init__", return_value=None):
+        llm = TokenCapturingGemini(model="models/gemini-1.5-flash", api_key="dummy")
+
+    mock_resp = MagicMock()
+    mock_resp.raw = None
+    mock_resp.additional_kwargs = {"prompt_tokens": 3, "completion_tokens": 6}
+
+    with patch("zettlr_rag.rag_setup.GoogleGenAI.acomplete", new=AsyncMock(return_value=mock_resp)):
+        reset_token_usage()
+        result = await llm.acomplete("hello")
+        assert result is mock_resp
+        assert get_last_token_usage().input_tokens == 3
+
+
+@pytest.mark.asyncio
+async def test_token_capturing_gemini_achat():
+    """achat() calls super and stores token usage."""
+    with patch("zettlr_rag.rag_setup.GoogleGenAI.__init__", return_value=None):
+        llm = TokenCapturingGemini(model="models/gemini-1.5-flash", api_key="dummy")
+
+    mock_resp = MagicMock()
+    mock_resp.raw = None
+    mock_resp.additional_kwargs = {"prompt_tokens": 4, "completion_tokens": 8}
+
+    with patch("zettlr_rag.rag_setup.GoogleGenAI.achat", new=AsyncMock(return_value=mock_resp)):
+        reset_token_usage()
+        result = await llm.achat([])
+        assert result is mock_resp
+        assert get_last_token_usage().output_tokens == 8
+
+
+def test_load_academic_markdown_missing_dir():
+    """load_academic_markdown raises FileNotFoundError for nonexistent path."""
+    with pytest.raises(FileNotFoundError, match="Directory not found"):
+        load_academic_markdown("/nonexistent/path/that/does/not/exist")
+
+
+@pytest.mark.asyncio
+async def test_plan_sync_raises_before_initialize(temp_workspace):
+    """plan_sync raises RuntimeError when index is not yet initialized."""
+    mgr = AcademicRAGSync(
+        base_path=temp_workspace["lib"],
+        chroma_path=temp_workspace["chroma"],
+        metadata_path=temp_workspace["metadata"],
+        graph_path=temp_workspace["graph"],
+    )
+    with pytest.raises(RuntimeError, match="Index not initialized"):
+        mgr.plan_sync([])
+
+
+@pytest.mark.asyncio
+async def test_execute_moves_raises_before_initialize(temp_workspace):
+    """execute_moves raises RuntimeError when index is not initialized."""
+    mgr = AcademicRAGSync(
+        base_path=temp_workspace["lib"],
+        chroma_path=temp_workspace["chroma"],
+        metadata_path=temp_workspace["metadata"],
+        graph_path=temp_workspace["graph"],
+    )
+    with pytest.raises(RuntimeError, match="Index or collection not initialized"):
+        mgr.execute_moves([])
+
+
+@pytest.mark.asyncio
+async def test_execute_deletions_raises_before_initialize(temp_workspace):
+    """execute_deletions raises RuntimeError when index is not initialized."""
+    mgr = AcademicRAGSync(
+        base_path=temp_workspace["lib"],
+        chroma_path=temp_workspace["chroma"],
+        metadata_path=temp_workspace["metadata"],
+        graph_path=temp_workspace["graph"],
+    )
+    with pytest.raises(RuntimeError, match="Index not initialized"):
+        mgr.execute_deletions(["some-id"])
+
+
+@pytest.mark.asyncio
+async def test_index_documents_raises_before_initialize(temp_workspace):
+    """index_documents raises RuntimeError when index is not initialized."""
+    mgr = AcademicRAGSync(
+        base_path=temp_workspace["lib"],
+        chroma_path=temp_workspace["chroma"],
+        metadata_path=temp_workspace["metadata"],
+        graph_path=temp_workspace["graph"],
+    )
+    from llama_index.core.schema import Document
+    with pytest.raises(RuntimeError, match="Index or vector store not initialized"):
+        await mgr.index_documents([Document(text="test")])
+
+
+@pytest.mark.asyncio
+async def test_initialize_graph_loads_existing(temp_workspace):
+    """_initialize_graph loads from disk when graph_path is populated."""
+    import pathlib
+    graph_path = temp_workspace["graph"]
+    # Simulate a populated graph directory
+    pathlib.Path(os.path.join(graph_path, "index_store.json")).write_text("{}")
+
+    mgr = AcademicRAGSync(
+        base_path=temp_workspace["lib"],
+        chroma_path=temp_workspace["chroma"],
+        metadata_path=temp_workspace["metadata"],
+        graph_path=graph_path,
+    )
+
+    mock_pg = MagicMock()
+    with (
+        patch("zettlr_rag.rag_setup.StorageContext") as mock_sc,
+        patch("zettlr_rag.rag_setup.load_index_from_storage", return_value=mock_pg),
+    ):
+        await mgr._initialize_graph()
+        assert mgr.pg_index is mock_pg
+
+
+@pytest.mark.asyncio
+async def test_index_documents_graph_update(temp_workspace):
+    """index_documents triggers incremental graph update when pg_index is set."""
+    lib_path = temp_workspace["lib"]
+    chroma_path = temp_workspace["chroma"]
+    metadata_path = temp_workspace["metadata"]
+    graph_path = temp_workspace["graph"]
+
+    with (
+        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
+    ):
+        mock_llm_class.return_value = MockLLM()
+        mock_embed_class.return_value = MockEmbedding(embed_dim=768)
+
+        import os
+        p = os.path.join(lib_path, "paper.md")
+        with open(p, "w") as f:
+            f.write("---\ntitle: Graph Test\n---\nContent for graph update test.")
+
+        mgr = AcademicRAGSync(
+            base_path=lib_path,
+            chroma_path=chroma_path,
+            metadata_path=metadata_path,
+            graph_path=graph_path,
+        )
+        await mgr.initialize()
+        # Inject a mock pg_index so the graph-update branch executes
+        mock_pg = MagicMock()
+        mgr.pg_index = mock_pg
+
+        docs = load_academic_markdown(lib_path)
+        with patch("zettlr_rag.rag_setup.nest_asyncio"):
+            with patch("zettlr_rag.rag_setup.SchemaLLMPathExtractor"):
+                await mgr.index_documents(docs)
+
+        assert mock_pg.insert_nodes.called
+
+
+@pytest.mark.asyncio
+async def test_index_documents_batch_embed_fallback(temp_workspace):
+    """index_documents falls back to per-node embedding when batch embed raises."""
+    lib_path = temp_workspace["lib"]
+    individual_calls = []
+
+    class FailingBatchEmbed(MockEmbedding):
+        """MockEmbedding that fails on batch but succeeds individually."""
+
+        def get_text_embedding_batch(self, texts, **kwargs):  # type: ignore[override]
+            raise RuntimeError("batch failed")
+
+        def get_text_embedding(self, text):  # type: ignore[override]
+            individual_calls.append(text)
+            return [0.1] * 768
+
+    with (
+        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
+    ):
+        mock_llm_class.return_value = MockLLM()
+        mock_embed_class.return_value = FailingBatchEmbed(embed_dim=768)
+
+        p = os.path.join(lib_path, "paper.md")
+        with open(p, "w") as f:
+            f.write("---\ntitle: Fallback Test\n---\nContent for fallback embedding test.")
+
+        mgr = AcademicRAGSync(
+            base_path=lib_path,
+            chroma_path=temp_workspace["chroma"],
+            metadata_path=temp_workspace["metadata"],
+            graph_path=temp_workspace["graph"],
+        )
+        await mgr.initialize()
+
+        docs = load_academic_markdown(lib_path)
+        await mgr.index_documents(docs)
+
+    assert len(individual_calls) > 0

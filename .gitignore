@@ -13,6 +13,9 @@ chroma_db_academic/
 .index_metadata/
 .graph_index/
 
+# claude
+.claude
+
 # Generic data/output folders
 data/
 outputs/
