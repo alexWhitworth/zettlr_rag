@@ -79,7 +79,7 @@ def _make_kg_extractor(api_key: str) -> SchemaLLMPathExtractor:
         ),
         possible_entities=GRAPH_ENTITIES,
         possible_relations=GRAPH_RELATIONS,
-        strict=True,
+        strict=False,  # strict=True silently drops all output when LLM labels don't match exactly
         num_workers=4,
         max_triplets_per_chunk=10,
     )
@@ -127,7 +127,9 @@ def build_graph(
     all_nodes: list[BaseNode] = [
         n
         for n in source_index.docstore.docs.values()
-        if hasattr(n, "embedding") and n.embedding is not None
+        if hasattr(n, "embedding")
+        and n.embedding is not None
+        and not (getattr(n, "text", "") or "").lstrip().startswith("#")
     ]
 
     # Resume: skip already-processed nodes
@@ -172,7 +174,11 @@ def build_graph(
 
         processed_ids.update(n.node_id for n in batch)
         _save_checkpoint(graph_path, processed_ids)
-        logger.info(f"  ✅ Batch {batch_num} done. Total processed: {len(processed_ids)}")
+        relation_count = len(pg_index.property_graph_store.graph.relations)
+        logger.info(
+            f"  ✅ Batch {batch_num} done. Processed: {len(processed_ids)} | "
+            f"Graph relations so far: {relation_count}"
+        )
 
     logger.info(f"✅ Graph index complete. Persisted to {graph_path}")
 

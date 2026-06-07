@@ -300,7 +300,7 @@ class AcademicRAGSync:
             llm=Settings.llm,
             possible_entities=GRAPH_ENTITIES,
             possible_relations=GRAPH_RELATIONS,
-            strict=True,
+            strict=False,  # strict=True silently drops all output when LLM labels don't match exactly
             num_workers=16,
             max_triplets_per_chunk=10,
         )
@@ -550,7 +550,7 @@ class AcademicRAGSync:
                         llm=Settings.llm,
                         possible_entities=GRAPH_ENTITIES,
                         possible_relations=GRAPH_RELATIONS,
-                        strict=True,
+                        strict=False,  # strict=True silently drops all LLM output on label mismatch
                         num_workers=4,
                         max_triplets_per_chunk=10,
                     )
@@ -559,8 +559,6 @@ class AcademicRAGSync:
                     self.pg_index.storage_context.persist(persist_dir=self.graph_path)
                 except Exception as e:
                     logger.warning(f"Graph update failed for batch, skipping: {e}")
-
-            total_processed += len(batch_docs)
 
         return total_processed
 

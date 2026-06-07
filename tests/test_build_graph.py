@@ -239,3 +239,106 @@ async def test_build_graph_nothing_to_do(temp_workspace):
             None, build_graph, chroma_path, metadata_path, graph_path
         )
         mock_pg_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_triplets_extracted_into_graph_store(temp_workspace):
+    """Regression test: verify triplets from the KG extractor land in the graph store.
+
+    Previously, strict=True silently dropped all LLM output, leaving
+    property_graph_store.graph.relations empty even after a full build.
+    This test uses a real PropertyGraphIndex and a mock LLM that returns one
+    valid KGSchema triplet, then asserts the relation is present in the store.
+    """
+    import asyncio
+    import os
+
+    import chromadb
+    from llama_index.core import StorageContext, VectorStoreIndex, load_index_from_storage
+    from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
+    from llama_index.vector_stores.chroma import ChromaVectorStore
+    from typing import cast
+
+    from zettlr_rag.consts import GRAPH_ENTITIES, GRAPH_RELATIONS
+
+    lib_path = temp_workspace["lib"]
+    chroma_path = temp_workspace["chroma"]
+    metadata_path = temp_workspace["metadata"]
+    graph_path = temp_workspace["graph"]
+
+    # --- Step 1: index a document so the docstore has an embedded node ---
+    with (
+        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
+    ):
+        mock_llm_class.return_value = MockLLM()
+        mock_embed_class.return_value = MockEmbedding(embed_dim=768)
+
+        sync_manager = AcademicRAGSync(
+            base_path=lib_path,
+            chroma_path=chroma_path,
+            metadata_path=metadata_path,
+            graph_path=graph_path,
+        )
+        await sync_manager.initialize()
+        with patch.object(AcademicRAGSync, "_initialize_graph", return_value=None):
+            await sync_manager.run_sync(run_verification=False)
+
+    # --- Step 2: build a real graph using a mock LLM that returns one triplet ---
+    # Build an extractor so we can grab its kg_schema_cls to construct a valid response.
+    from llama_index.core.llms.mock import MockLLM as _MockLLM
+
+    extractor_probe = SchemaLLMPathExtractor(
+        llm=_MockLLM(),
+        possible_entities=GRAPH_ENTITIES,
+        possible_relations=GRAPH_RELATIONS,
+        strict=False,
+    )
+    KGSchema = extractor_probe.kg_schema_cls
+
+    valid_schema = KGSchema(
+        triplets=[
+            {
+                "subject": {"name": "FixturePaper", "type": "Document"},
+                "relation": {"type": "AUTHORED_BY"},
+                "object": {"name": "Smith", "type": "Author"},
+            }
+        ]
+    )
+
+    class TripletMockLLM(_MockLLM):
+        """MockLLM that returns a valid KGSchema with one triplet."""
+
+        async def astructured_predict(self, output_cls, prompt, **kwargs):
+            return valid_schema
+
+        def structured_predict(self, output_cls, prompt, **kwargs):
+            return valid_schema
+
+    loop = asyncio.get_event_loop()
+    with (
+        patch("zettlr_rag.build_graph.setup_settings"),
+        patch(
+            "zettlr_rag.build_graph._make_kg_extractor",
+            return_value=SchemaLLMPathExtractor(
+                llm=TripletMockLLM(),
+                possible_entities=GRAPH_ENTITIES,
+                possible_relations=GRAPH_RELATIONS,
+                strict=False,
+            ),
+        ),
+    ):
+        await loop.run_in_executor(
+            None, build_graph, chroma_path, metadata_path, graph_path
+        )
+
+    # --- Step 3: reload the persisted graph and assert relations > 0 ---
+    pg_storage = StorageContext.from_defaults(persist_dir=graph_path)
+    from llama_index.core import PropertyGraphIndex
+    pg_index = cast(PropertyGraphIndex, load_index_from_storage(pg_storage))
+
+    relations = pg_index.property_graph_store.graph.relations
+    assert len(relations) > 0, (
+        f"Expected at least 1 relation in graph store, got 0. "
+        f"This likely means strict=True is silently dropping all extractor output."
+    )
