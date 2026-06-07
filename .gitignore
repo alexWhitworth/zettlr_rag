@@ -40,7 +40,7 @@ evals/append_consensus.py
 evals/validate_jsonl.py
 
 # planning
-pg_implement.md
+plans/
 
 # Research Notes 
 # (Ignore if you want your research log to stay local)
@@ -49,4 +49,3 @@ pg_implement.md
 # code coverage
 .coverage
 coverage.xml
-codecov_plan.md

@@ -13,6 +13,8 @@ from typing import Any, cast
 import chromadb
 import nest_asyncio  # type: ignore
 import numpy as np
+
+nest_asyncio.apply()
 from llama_index.core import (
     PropertyGraphIndex,
     StorageContext,
@@ -380,8 +382,6 @@ def print_metrics_stderr(metrics: QueryMetrics) -> None:
 
 
 def main() -> None:
-    nest_asyncio.apply()
-
     # see README.md for usage examples, including complex filter construction
     parser = argparse.ArgumentParser(description="Query the Zettlr MD-RAG Library")
     parser.add_argument("question", type=str, help="The question to ask.")
