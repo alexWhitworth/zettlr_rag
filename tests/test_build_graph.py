@@ -42,7 +42,11 @@ async def test_build_graph_fresh_start(temp_workspace):
         for i in range(3):
             p = os.path.join(lib_path, f"paper{i}.md")
             with open(p, "w") as f:
-                f.write(f"---\ntitle: Paper {i}\n---\nUnique text for paper {i}.")
+                f.write(
+                    f"---\ntitle: Paper {i}\n---\n"
+                    f"Unique text for paper {i}. This paper presents a comprehensive "
+                    f"analysis of the subject matter using rigorous empirical methodology."
+                )
 
         sync_manager = AcademicRAGSync(
             base_path=lib_path,
@@ -94,7 +98,11 @@ async def test_build_graph_checkpoint_resume(temp_workspace):
         for i in range(4):
             p = os.path.join(lib_path, f"paper{i}.md")
             with open(p, "w") as f:
-                f.write(f"---\ntitle: Paper {i}\n---\nUnique text for paper {i}.")
+                f.write(
+                    f"---\ntitle: Paper {i}\n---\n"
+                    f"Unique text for paper {i}. This paper presents a comprehensive "
+                    f"analysis of the subject matter using rigorous empirical methodology."
+                )
 
         sync_manager = AcademicRAGSync(
             base_path=lib_path,

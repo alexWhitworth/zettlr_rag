@@ -300,7 +300,7 @@ class AcademicRAGSync:
             llm=Settings.llm,
             possible_entities=GRAPH_ENTITIES,
             possible_relations=GRAPH_RELATIONS,
-            strict=False,  # strict=True silently drops all output when LLM labels don't match exactly
+            strict=False,
             num_workers=16,
             max_triplets_per_chunk=10,
         )
@@ -502,7 +502,7 @@ class AcademicRAGSync:
                 n
                 for n in nodes
                 # Filter short nodes and raw BibTeX blocks
-                if len(n.get_content().strip()) >= 20 and not BIBTEX_PATTERN.search(n.get_content())
+                if len(n.get_content().strip()) >= 100 and not BIBTEX_PATTERN.search(n.get_content())
             ]
 
             if not nodes:
@@ -550,7 +550,7 @@ class AcademicRAGSync:
                         llm=Settings.llm,
                         possible_entities=GRAPH_ENTITIES,
                         possible_relations=GRAPH_RELATIONS,
-                        strict=False,  # strict=True silently drops all LLM output on label mismatch
+                        strict=False,
                         num_workers=4,
                         max_triplets_per_chunk=10,
                     )

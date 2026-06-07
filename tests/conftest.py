@@ -63,7 +63,11 @@ def temp_workspace(tmp_path):
     folder_a.mkdir()
 
     paper_path = folder_a / "paper1.md"
-    paper_path.write_text("---\ntitle: Fixture Paper\n---\nUnique text for fixture paper.")
+    paper_path.write_text(
+        "---\ntitle: Fixture Paper\n---\n"
+        "Unique text for fixture paper. This paper presents a comprehensive analysis "
+        "of the subject matter using rigorous empirical methodology."
+    )
 
     graph_dir = tmp_path / "graph"
     graph_dir.mkdir()

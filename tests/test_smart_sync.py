@@ -39,11 +39,19 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         # 1. Create two new papers at the root
         p1_path = os.path.join(lib_path, "paper1.md")
         with open(p1_path, "w") as f:
-            f.write("---\ntitle: Paper 1\nyear: 2021\n---\nUnique text for paper 1.")
+            f.write(
+                "---\ntitle: Paper 1\nyear: 2021\n---\n"
+                "Unique text for paper 1. This paper presents a comprehensive "
+                "analysis of the subject matter using rigorous empirical methodology."
+            )
 
         p2_path = os.path.join(lib_path, "paper2.md")
         with open(p2_path, "w") as f:
-            f.write("---\ntitle: Paper 2\nyear: 2022\n---\nUnique text for paper 2.")
+            f.write(
+                "---\ntitle: Paper 2\nyear: 2022\n---\n"
+                "Unique text for paper 2. This paper presents a comprehensive "
+                "analysis of the subject matter using rigorous empirical methodology."
+            )
 
         await sync_manager.run_sync(run_verification=False)
         captured = capsys.readouterr()
@@ -53,7 +61,11 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
         # --- PHASE 2: Incremental Updates ---
         p3_path = os.path.join(lib_path, "paper3.md")
         with open(p3_path, "w") as f:
-            f.write("---\ntitle: Paper 3\n---\nUnique text for paper 3.")
+            f.write(
+                "---\ntitle: Paper 3\n---\n"
+                "Unique text for paper 3. This paper presents a comprehensive "
+                "analysis of the subject matter using rigorous empirical methodology."
+            )
 
         with open(p1_path, "a") as f:
             f.write("\nAdded more content to paper 1.")

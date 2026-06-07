@@ -347,7 +347,11 @@ async def test_index_documents_graph_update(temp_workspace):
         import os
         p = os.path.join(lib_path, "paper.md")
         with open(p, "w") as f:
-            f.write("---\ntitle: Graph Test\n---\nContent for graph update test.")
+            f.write(
+                "---\ntitle: Graph Test\n---\n"
+                "Content for graph update test. This paper presents a comprehensive "
+                "analysis of the subject matter using rigorous empirical methodology."
+            )
 
         mgr = AcademicRAGSync(
             base_path=lib_path,
@@ -393,7 +397,11 @@ async def test_index_documents_batch_embed_fallback(temp_workspace):
 
         p = os.path.join(lib_path, "paper.md")
         with open(p, "w") as f:
-            f.write("---\ntitle: Fallback Test\n---\nContent for fallback embedding test.")
+            f.write(
+                "---\ntitle: Fallback Test\n---\n"
+                "Content for fallback embedding test. This paper presents a comprehensive "
+                "analysis of the subject matter using rigorous empirical methodology."
+            )
 
         mgr = AcademicRAGSync(
             base_path=lib_path,

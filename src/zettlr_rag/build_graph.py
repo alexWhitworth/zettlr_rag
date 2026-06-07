@@ -16,6 +16,7 @@ from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from zettlr_rag.consts import (
+    BIBTEX_PATTERN,
     BUILD_GRAPH_MODEL,
     CHROMA_PATH,
     GRAPH_ENTITIES,
@@ -125,7 +126,11 @@ def build_graph(
     source_index = cast(VectorStoreIndex, load_index_from_storage(storage_context))
 
     all_nodes: list[BaseNode] = [
-        n for n in source_index.docstore.docs.values() if getattr(n, "text", "")
+        n for n in source_index.docstore.docs.values()
+        if hasattr(n, "embedding")
+        and n.embedding is not None
+        and len(getattr(n, "text", "").strip()) >= 100
+        and not BIBTEX_PATTERN.search(getattr(n, "text", ""))
     ]
 
     # Resume: skip already-processed nodes
