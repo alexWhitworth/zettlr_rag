@@ -125,11 +125,7 @@ def build_graph(
     source_index = cast(VectorStoreIndex, load_index_from_storage(storage_context))
 
     all_nodes: list[BaseNode] = [
-        n
-        for n in source_index.docstore.docs.values()
-        if hasattr(n, "embedding")
-        and n.embedding is not None
-        and not (getattr(n, "text", "") or "").lstrip().startswith("#")
+        n for n in source_index.docstore.docs.values() if getattr(n, "text", "")
     ]
 
     # Resume: skip already-processed nodes
