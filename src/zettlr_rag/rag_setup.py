@@ -7,8 +7,8 @@ from collections.abc import Sequence
 from typing import Any, cast
 
 import chromadb
-import frontmatter  # type: ignore
-import nest_asyncio
+import frontmatter
+import nest_asyncio  # type: ignore[import-untyped]
 from chromadb.api.models.Collection import Collection
 from dotenv import load_dotenv
 from llama_index.core import (
@@ -296,15 +296,6 @@ class AcademicRAGSync:
 
     async def _initialize_graph(self) -> None:
         """Load existing property graph index if available."""
-        kg_extractor = SchemaLLMPathExtractor(
-            llm=Settings.llm,
-            possible_entities=GRAPH_ENTITIES,
-            possible_relations=GRAPH_RELATIONS,
-            strict=False,
-            num_workers=16,
-            max_triplets_per_chunk=10,
-        )
-
         if os.path.exists(self.graph_path) and os.listdir(self.graph_path):
             logger.info("Loading existing property graph index...")
             storage_context = StorageContext.from_defaults(persist_dir=self.graph_path)
@@ -502,7 +493,8 @@ class AcademicRAGSync:
                 n
                 for n in nodes
                 # Filter short nodes and raw BibTeX blocks
-                if len(n.get_content().strip()) >= 100 and not BIBTEX_PATTERN.search(n.get_content())
+                if len(n.get_content().strip()) >= 100
+                and not BIBTEX_PATTERN.search(n.get_content())
             ]
 
             if not nodes:
@@ -548,8 +540,8 @@ class AcademicRAGSync:
                     nest_asyncio.apply()
                     kg_extractor = SchemaLLMPathExtractor(
                         llm=Settings.llm,
-                        possible_entities=GRAPH_ENTITIES,
-                        possible_relations=GRAPH_RELATIONS,
+                        possible_entities=cast(type[Any], GRAPH_ENTITIES),
+                        possible_relations=cast(type[Any], GRAPH_RELATIONS),
                         strict=False,
                         num_workers=4,
                         max_triplets_per_chunk=10,
@@ -606,7 +598,10 @@ class AcademicRAGSync:
             similarity_top_k=20,
             system_prompt=SYSTEM_PROMPT,
         )
-        query_text = "Summarize how shrinkage can be used to improve experiment estimates and their precision."
+        query_text = (
+            "Summarize how shrinkage can be used to improve experiment"
+            " estimates and their precision."
+        )
         response = await query_engine.aquery(query_text)
         print(f"\n# Query Response\n{response}")
 

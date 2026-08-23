@@ -1,5 +1,5 @@
 import os
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from llama_index.core.embeddings.mock_embed_model import MockEmbedding
@@ -125,8 +125,9 @@ async def test_build_graph_checkpoint_resume(temp_workspace):
     sc = StorageContext.from_defaults(vector_store=vs, persist_dir=metadata_path)
 
     with patch("zettlr_rag.build_graph.setup_settings"):
-        from llama_index.core import VectorStoreIndex
         from typing import cast
+
+        from llama_index.core import VectorStoreIndex
         idx = cast(VectorStoreIndex, load_index_from_storage(sc))
         all_nodes = [
             n for n in idx.docstore.docs.values()
@@ -150,8 +151,9 @@ async def test_build_graph_checkpoint_resume(temp_workspace):
     loop = asyncio.get_event_loop()
 
     # Load real source index so the mock can return it for the first load_index_from_storage call
-    from llama_index.core import VectorStoreIndex
     from typing import cast as tcast
+
+    from llama_index.core import VectorStoreIndex
     real_source_index = tcast(VectorStoreIndex, load_index_from_storage(sc))
 
     with (
@@ -214,18 +216,20 @@ async def test_build_graph_nothing_to_do(temp_workspace):
             await sync_manager.run_sync(run_verification=False)
 
     # Checkpoint all nodes upfront
+    import json
+
     import chromadb
     from llama_index.core import StorageContext, load_index_from_storage
     from llama_index.vector_stores.chroma import ChromaVectorStore
-    import json
 
     db = chromadb.PersistentClient(path=chroma_path)
     col = db.get_or_create_collection("research_papers")
     vs = ChromaVectorStore(chroma_collection=col)
     sc = StorageContext.from_defaults(vector_store=vs, persist_dir=metadata_path)
     with patch("zettlr_rag.build_graph.setup_settings"):
-        from llama_index.core import VectorStoreIndex
         from typing import cast
+
+        from llama_index.core import VectorStoreIndex
         idx = cast(VectorStoreIndex, load_index_from_storage(sc))
         all_ids = [
             n.node_id for n in idx.docstore.docs.values()
@@ -259,13 +263,10 @@ async def test_triplets_extracted_into_graph_store(temp_workspace):
     valid KGSchema triplet, then asserts the relation is present in the store.
     """
     import asyncio
-    import os
-
-    import chromadb
-    from llama_index.core import StorageContext, VectorStoreIndex, load_index_from_storage
-    from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
-    from llama_index.vector_stores.chroma import ChromaVectorStore
     from typing import cast
+
+    from llama_index.core import StorageContext, load_index_from_storage
+    from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
 
     from zettlr_rag.consts import GRAPH_ENTITIES, GRAPH_RELATIONS
 
@@ -302,9 +303,9 @@ async def test_triplets_extracted_into_graph_store(temp_workspace):
         possible_relations=GRAPH_RELATIONS,
         strict=False,
     )
-    KGSchema = extractor_probe.kg_schema_cls
+    kg_schema_cls = extractor_probe.kg_schema_cls
 
-    valid_schema = KGSchema(
+    valid_schema = kg_schema_cls(
         triplets=[
             {
                 "subject": {"name": "FixturePaper", "type": "Document"},
@@ -347,6 +348,6 @@ async def test_triplets_extracted_into_graph_store(temp_workspace):
 
     relations = pg_index.property_graph_store.graph.relations
     assert len(relations) > 0, (
-        f"Expected at least 1 relation in graph store, got 0. "
-        f"This likely means strict=True is silently dropping all extractor output."
+        "Expected at least 1 relation in graph store, got 0. "
+        "This likely means strict=True is silently dropping all extractor output."
     )

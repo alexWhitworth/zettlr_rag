@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import cast
+from typing import Any, cast
 
 import chromadb
 from llama_index.core import (
@@ -78,8 +78,8 @@ def _make_kg_extractor(api_key: str) -> SchemaLLMPathExtractor:
             model=f"models/{BUILD_GRAPH_MODEL}",
             api_key=api_key,
         ),
-        possible_entities=GRAPH_ENTITIES,
-        possible_relations=GRAPH_RELATIONS,
+        possible_entities=cast(type[Any], GRAPH_ENTITIES),
+        possible_relations=cast(type[Any], GRAPH_RELATIONS),
         strict=False,  # strict=True silently drops all output when LLM labels don't match exactly
         num_workers=4,
         max_triplets_per_chunk=10,
@@ -175,7 +175,7 @@ def build_graph(
 
         processed_ids.update(n.node_id for n in batch)
         _save_checkpoint(graph_path, processed_ids)
-        relation_count = len(pg_index.property_graph_store.graph.relations)
+        relation_count = len(pg_index.property_graph_store.graph.relations)  # type: ignore[attr-defined]
         logger.info(
             f"  ✅ Batch {batch_num} done. Processed: {len(processed_ids)} | "
             f"Graph relations so far: {relation_count}"

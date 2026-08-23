@@ -322,7 +322,7 @@ async def test_initialize_graph_loads_existing(temp_workspace):
 
     mock_pg = MagicMock()
     with (
-        patch("zettlr_rag.rag_setup.StorageContext") as mock_sc,
+        patch("zettlr_rag.rag_setup.StorageContext") as _,
         patch("zettlr_rag.rag_setup.load_index_from_storage", return_value=mock_pg),
     ):
         await mgr._initialize_graph()

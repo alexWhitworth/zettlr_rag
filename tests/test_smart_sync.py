@@ -183,6 +183,7 @@ async def test_full_rag_lifecycle(temp_workspace, capsys):
             else 0
         )
         assert pg_nodes_after > pg_nodes_before, (
-            f"Graph node count did not increase after new doc: {pg_nodes_before} -> {pg_nodes_after}"
+            f"Graph node count did not increase after new doc:"
+            f" {pg_nodes_before} -> {pg_nodes_after}"
         )
         """

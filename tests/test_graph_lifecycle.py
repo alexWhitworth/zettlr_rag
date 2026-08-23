@@ -27,8 +27,12 @@ class TripleExtractingMockLLM(MockLLM):
     """
 
     def structured_predict(self, output_cls: Any, prompt: Any, **kwargs: Any) -> Any:
-        entity_cls = output_cls.__annotations__["triplets"].__args__[0].__annotations__["subject"]
-        relation_cls = output_cls.__annotations__["triplets"].__args__[0].__annotations__["relation"]
+        entity_cls = output_cls.__annotations__["triplets"].__args__[0].__annotations__[
+            "subject"
+        ]
+        relation_cls = output_cls.__annotations__["triplets"].__args__[0].__annotations__[
+            "relation"
+        ]
         triplet_cls = output_cls.__annotations__["triplets"].__args__[0]
 
         subject = entity_cls(type="Concept", name="test_entity_a")
