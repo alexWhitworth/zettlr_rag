@@ -1,5 +1,8 @@
 # Zettlr RAG (MD-RAG) + LLM Knowledge Base
 
+[![CI](https://github.com/alexWhitworth/zettlr_rag/actions/workflows/ci.yml/badge.svg)](https://github.com/alexWhitworth/zettlr_rag/actions/workflows/ci.yml)
+![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)
+
 A specialized Retrieval-Augmented Generation (RAG) system for personal note libraries. This system 
 implements **MD-RAG** (Metadata RAG), preserving and utilizing YAML frontmatter from Zettlr markdown 
 files for high-precision scientific retrieval.
