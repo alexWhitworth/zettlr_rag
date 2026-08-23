@@ -635,8 +635,7 @@ async def main_async(
 def main() -> None:
     # Default to the full library root
     default_path = (
-        "/Users/awhitworth/Library/CloudStorage/"
-        "ProtonDrive-whitworth.alex@protonmail.com-folder/Zettlr/Papers"
+        "/home/alexwhitworth/Documents/proton/Zettlr"
     )
     import sys
 
