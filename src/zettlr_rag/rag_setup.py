@@ -619,7 +619,7 @@ async def main_async(
     chroma_path: str = CHROMA_PATH,
     metadata_path: str = METADATA_PATH,
     graph_path: str = GRAPH_INDEX_PATH,
-    checkpoint_batch_size: int = 50,
+    checkpoint_batch_size: int = 25,
     run_verification: bool = True,
 ) -> None:
     sync_manager = AcademicRAGSync(
