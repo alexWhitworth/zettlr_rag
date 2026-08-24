@@ -33,7 +33,7 @@ async def test_build_graph_fresh_start(temp_workspace):
     graph_path = temp_workspace["graph"]
 
     with (
-        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_llm_class,
         patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
     ):
         mock_llm_class.return_value = MockLLM()
@@ -89,7 +89,7 @@ async def test_build_graph_checkpoint_resume(temp_workspace):
     graph_path = temp_workspace["graph"]
 
     with (
-        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_llm_class,
         patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
     ):
         mock_llm_class.return_value = MockLLM()
@@ -195,7 +195,7 @@ async def test_build_graph_nothing_to_do(temp_workspace):
     graph_path = temp_workspace["graph"]
 
     with (
-        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_llm_class,
         patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
     ):
         mock_llm_class.return_value = MockLLM()
@@ -277,7 +277,7 @@ async def test_triplets_extracted_into_graph_store(temp_workspace):
 
     # --- Step 1: index a document so the docstore has an embedded node ---
     with (
-        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_llm_class,
         patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
     ):
         mock_llm_class.return_value = MockLLM()

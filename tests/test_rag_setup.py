@@ -54,7 +54,7 @@ async def test_main_async_survey(temp_chroma_db, temp_metadata_path, temp_graph_
     (lib_dir / "paper1.md").write_text(paper_text)
 
     with (
-        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_llm_class,
         patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
     ):
         mock_llm_class.return_value = MockLLM()
@@ -338,7 +338,7 @@ async def test_index_documents_graph_update(temp_workspace):
     graph_path = temp_workspace["graph"]
 
     with (
-        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_llm_class,
         patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
     ):
         mock_llm_class.return_value = MockLLM()
@@ -389,7 +389,7 @@ async def test_index_documents_batch_embed_fallback(temp_workspace):
             return [0.1] * 768
 
     with (
-        patch("zettlr_rag.rag_setup.GoogleGenAI") as mock_llm_class,
+        patch("zettlr_rag.rag_setup.TokenCapturingGemini") as mock_llm_class,
         patch("zettlr_rag.rag_setup.GoogleGenAIEmbedding") as mock_embed_class,
     ):
         mock_llm_class.return_value = MockLLM()
