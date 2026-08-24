@@ -63,6 +63,7 @@ async def test_build_graph_fresh_start(temp_workspace):
 
     with (
         patch("zettlr_rag.build_graph.setup_settings"),
+        patch("zettlr_rag.build_graph.GoogleGenAI"),
         patch("zettlr_rag.build_graph.SchemaLLMPathExtractor", return_value=MagicMock()),
         patch("zettlr_rag.build_graph.PropertyGraphIndex") as mock_pg_cls,
     ):
@@ -158,6 +159,7 @@ async def test_build_graph_checkpoint_resume(temp_workspace):
 
     with (
         patch("zettlr_rag.build_graph.setup_settings"),
+        patch("zettlr_rag.build_graph.GoogleGenAI"),
         patch("zettlr_rag.build_graph.SchemaLLMPathExtractor", return_value=MagicMock()),
         patch("zettlr_rag.build_graph.PropertyGraphIndex") as mock_pg_cls,
         patch("zettlr_rag.build_graph.load_index_from_storage") as mock_load,
