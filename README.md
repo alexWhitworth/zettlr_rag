@@ -46,6 +46,8 @@ and relational triplet search (**Property Graph**).
 2.  **Property Graph Extraction**: During ingestion, a `SchemaLLMPathExtractor` processes the nodes 
 to build an academic knowledge graph based on defined entity relationships (e.g. `Paper` `USES_METHOD` 
 `Method`). This graph runs parallel to the vector store to ground relationships.
+    - **NOTE:** In practice, I have not found Property Graphs useful. Turning off is as simple as 
+    never running `build_graph.py`
 3.  **Fusion**: Uses **Reciprocal Rank Fusion (RRF)** with `reciprocal_rerank` mode to merge and 
 normalize results from the Vector, BM25, and Graph retrievers.
 4.  **Refinement Pipeline**:
