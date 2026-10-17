@@ -48,6 +48,7 @@ dev = [
     "ruff",
     "mypy",
     "black",
+    "diff-cover>=9",
 ]
 
 [tool.ruff]
@@ -94,7 +95,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 80
+fail_under = 85
 show_missing = true
 exclude_lines = [
     "pragma: no cover",
